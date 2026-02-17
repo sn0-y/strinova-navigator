@@ -1,10 +1,11 @@
 import './lib/setup';
 
 import { LogLevel, SapphireClient } from '@sapphire/framework';
+import { config } from 'config';
 import { GatewayIntentBits } from 'discord.js';
 
 const client = new SapphireClient({
-	defaultPrefix: '&',
+	defaultPrefix: config.prefix,
 	caseInsensitiveCommands: true,
 	logger: {
 		level: LogLevel.Debug
