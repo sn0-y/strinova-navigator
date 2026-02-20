@@ -12,12 +12,14 @@ export async function checkDuplicateEvent(channelId: string) {
     return event;
 }
 
-export async function createEvent(channelId: string, eventName: string) {
+export async function createEvent(channelId: string, eventName: string, requireAttachment: boolean, minCharacters: number) {
     const event = await prisma.event.create({
         data: {
             channelId: channelId,
             name: eventName,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
+            requireAttachment: requireAttachment,
+            minCharacters: minCharacters
         }
     })
 

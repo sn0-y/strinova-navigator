@@ -19,6 +19,9 @@ model Event {
   channelId      String    // The channel/thread created for this event
   status         EventStatus @default(ACTIVE)
   createdAt      DateTime  @default(now())
+
+  requireAttachment Boolean   @default(false)
+  minCharacters     Int       @default(0)
   
   participants   Participant[]
   winners        Winner[]
