@@ -17,7 +17,14 @@ const client = new SapphireClient({
 		GatewayIntentBits.GuildMessages,
 		GatewayIntentBits.MessageContent
 	],
-	loadMessageCommandListeners: true
+	loadMessageCommandListeners: true,
+	tasks: {
+		bull: {
+			connection: {
+				url: process.env.REDIS_URL
+			}
+		}
+	}
 });
 
 const main = async () => {
