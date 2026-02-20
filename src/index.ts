@@ -1,6 +1,7 @@
+import { redis } from '#lib/redis';
 import './lib/setup';
 
-import { LogLevel, SapphireClient } from '@sapphire/framework';
+import { container, LogLevel, SapphireClient } from '@sapphire/framework';
 import { config } from 'config';
 import { GatewayIntentBits } from 'discord.js';
 
@@ -21,6 +22,8 @@ const client = new SapphireClient({
 
 const main = async () => {
 	try {
+		container.redis = redis;
+
 		client.logger.info('Logging in...');
 		await client.login();
 		client.logger.info(`Logged in as @${client.user?.username} (${client.user?.id})!`);
@@ -32,3 +35,9 @@ const main = async () => {
 };
 
 void main();
+
+declare module '@sapphire/framework' {
+	interface Container{
+		redis: typeof redis;
+	}
+}

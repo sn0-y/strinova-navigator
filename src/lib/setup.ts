@@ -27,5 +27,8 @@ colorette.createColors({ useColor: true });
 declare module '@skyra/env-utilities' {
 	interface Env {
 		OWNERS: ArrayString;
+		// Storage connection strings
+		DATABASE_URL: string;
+		REDIS_URL: string;
 	}
 }
