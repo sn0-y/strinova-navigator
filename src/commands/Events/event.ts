@@ -8,11 +8,6 @@ import { checkDuplicateEvent, createEvent } from 'services/events.service';
 	description: 'Event management utilities',
 	subcommands: [
 		{
-			name: 'list',
-			type: 'method',
-			preconditions: [['StaffOnly', 'LeadModOnly']]
-		},
-		{
 			name: 'track',
 			type: 'method',
 			preconditions: [['StaffOnly', 'LeadModOnly']],
@@ -25,12 +20,6 @@ export class UserCommand extends Subcommand {
 			builder //
 				.setName(this.name)
 				.setDescription(this.description)
-				.addSubcommand((subcommand) =>
-					subcommand //
-						.setName('list')
-						.setDescription('List all tracked events')
-						.addStringOption((option) => option.setName('state').addChoices({ name: 'active', value: 'active' }, { name: 'ended', value: 'ended' }))
-				)
 				.addSubcommand((subcommand) =>
 					subcommand //
 						.setName('track')
@@ -49,10 +38,6 @@ export class UserCommand extends Subcommand {
 						)
 				)
 		);
-	}
-
-	public async list(interaction: Subcommand.ChatInputCommandInteraction) {
-		
 	}
 
 	public async track(interaction: Subcommand.ChatInputCommandInteraction) {
