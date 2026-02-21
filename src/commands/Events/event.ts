@@ -1,8 +1,8 @@
 import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
-import { Channel } from 'discord.js';
-import { checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getActiveEvent, getLatestEvent } from 'services/events.service';
+import { Channel, ChannelType } from 'discord.js';
+import { backfillEvent, checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getActiveEvent, getLatestEvent } from 'services/events.service';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'event',
@@ -49,6 +49,7 @@ export class UserCommand extends Subcommand {
 								.setName('channel')
 								.setDescription('The channel to track the event in')
 								.setRequired(true)
+								.addChannelTypes(ChannelType.GuildText, ChannelType.PublicThread)
 						)
 						.addBooleanOption((option) =>
 							option //
@@ -100,7 +101,11 @@ export class UserCommand extends Subcommand {
 		if (dupeCheck) return interaction.editReply({ content: `This event is already being tracked by [${dupeCheck.id} : ${dupeCheck.name}]` });
 
 		const event = await createEvent(channel.id, eventName, requireAttachment, minCharacters);
-		return interaction.editReply({ content: `Started tracking event [${event.id} : ${event.name}] in ${channel.url}` });
+		await interaction.editReply({ content: `Started tracking event [${event.id} : ${event.name}] in ${channel.url}` });
+
+		const sync = await backfillEvent(event.id, channel, requireAttachment, minCharacters);
+
+		return interaction.followUp({ content: `Backfilled ${sync} submissions for event [${event.id} : ${event.name}] in ${channel.url}` });
 	}
 
 	public async end(interaction: Subcommand.ChatInputCommandInteraction) {
