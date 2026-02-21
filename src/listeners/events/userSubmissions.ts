@@ -15,6 +15,7 @@ export class UserEvent extends Listener {
 
 		const event = await getEvent(message.channelId);
 		if (!event) return;
+		if (event.status !== 'ACTIVE') return;
 
 		// Check if submission meets requirements
 		const meetsAttachmentRequirement = !event.requireAttachment || message.attachments.size > 0;

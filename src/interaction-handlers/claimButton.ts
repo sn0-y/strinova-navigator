@@ -33,13 +33,13 @@ export class ButtonHandler extends InteractionHandler {
 		return await interaction.showModal(modal);
 	}
 
-	public override parse(interaction: ButtonInteraction) {
+	public override async parse(interaction: ButtonInteraction) {
 		if (!interaction.customId.startsWith('event:claim:btn:')) return this.none();
 
 		const eventId = parseInt(interaction.customId.split(':')[3]);
 		if (isNaN(eventId)) return this.none();
 
-		if (!reportSent(eventId)) return this.none();
+		if (!await reportSent(eventId)) return this.none();
 
 		return this.some({ eventId });
 	}

@@ -1,7 +1,7 @@
 import { ScheduledTask } from '@sapphire/plugin-scheduled-tasks';
 import { config } from 'config';
 import { Channel } from 'discord.js';
-import { compileEventReport, sendReport } from 'services/events.service';
+import { sendReport } from 'services/events.service';
 
 interface ReportPayload {
 	eventId: number;
@@ -21,9 +21,6 @@ export class EventReport extends ScheduledTask {
 
 		const channel = (await this.container.client.channels.fetch(config.channels.eventNotifications).catch(() => null)) as Channel | null;
 		if (!channel?.isSendable()) return;
-
-		const winners = await compileEventReport(payload.eventId);
-		if (!winners) return;
 
 		return await sendReport(payload.eventId, config.channels.eventNotifications);
 	}

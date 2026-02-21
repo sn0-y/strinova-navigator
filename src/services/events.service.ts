@@ -113,19 +113,14 @@ export async function pickWinners(eventId: number, winnerCount: number) {
 	}
 
 	const pool = participants.map((p) => p.userId);
-	const winners = new Set<string>();
 
-	let attempts = 0;
-	const maxAttempts = winnerCount * 10;
-
-	while (winners.size < winnerCount && attempts < maxAttempts) {
-		const randomIndex = randomInt(0, pool.length);
-		winners.add(pool[randomIndex]);
-
-		attempts++;
+	// Fisher–Yates shuffle to sample without replacement
+	for (let i = pool.length - 1; i > 0; i--) {
+		const j = randomInt(0, i + 1);
+		[pool[i], pool[j]] = [pool[j], pool[i]];
 	}
 
-	const winnerIds = Array.from(winners);
+	const winnerIds = pool.slice(0, winnerCount);
 
 	const winnerData = winnerIds.map((userId) => ({
 		userId: userId,
@@ -188,7 +183,7 @@ export async function compileEventReport(eventId: number) {
 		}
 	});
 
-	let csvContent = 'Discord ID, Strinova ID\n';
+	let csvContent = 'Discord ID,Strinova ID,Claimed At\n';
 	let missingCount = 0;
 
 	for (const winner of winners) {
@@ -219,11 +214,6 @@ export async function sendReport(eventId: number, channelId: string) {
 		return false;
 	}
 
-	await prisma.event.update({
-		where: { id: eventId },
-		data: { reportSent: true }
-	});
-
 	const attachment = {
 		name: `event-${eventId}-report.csv`,
 		attachment: Buffer.from(report.csvContent, 'utf-8')
@@ -232,6 +222,11 @@ export async function sendReport(eventId: number, channelId: string) {
 	await channel.send({
 		content: `The event **${report.eventName}** has ended. Here is the report of winners. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}`,
 		files: [attachment]
+	});
+
+	await prisma.event.update({
+		where: { id: eventId },
+		data: { reportSent: true }
 	});
 
 	return true;
