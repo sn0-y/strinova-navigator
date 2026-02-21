@@ -30,6 +30,7 @@ model Participant {
   event          Event   @relation(fields: [eventId], references: [id])
 
   @@id([userId, eventId])
+  @@index([eventId])
 }
 
 model Winner {
@@ -40,6 +41,7 @@ model Winner {
   event     Event     @relation(fields: [eventId], references: [id])
 
   @@id([userId, eventId])
+  @@index([eventId])
 }
 
 enum EventStatus {
