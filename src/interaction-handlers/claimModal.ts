@@ -12,9 +12,9 @@ export class ModalHandler extends InteractionHandler {
 		const uid = interaction.fields.getTextInputValue('uidInput');
 
 		const submitResult = await submitWinnerUid(interaction.user.id, eventId, uid);
-		if (!submitResult)
+		if (!submitResult.success)
 			return interaction.reply({
-				content: 'Sorry, there was an error processing your claim. Please try again later or contact the staff team if the issue persists.',
+				content: submitResult.error || 'Sorry, there was an error processing your claim. Please try again later or contact the staff team if the issue persists.',
 				flags: ['Ephemeral']
 			});
 
