@@ -21,6 +21,8 @@ model Event {
   
   reportSent        Boolean       @default(false)
   resultChannelId   String?
+
+  @@index([channelId, status])
 }
 
 model Participant {
