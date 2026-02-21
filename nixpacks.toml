@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ['...', 'bun', 'openssl']
+aptPkgs = ['...', 'build-essential', 'python3']
+
+[phases.install]
+cmds = ['bun install']
+
+[phases.build]
+cmds = ['bunx prisma generate']
+
+[start]
+cmd = 'bun run start'
