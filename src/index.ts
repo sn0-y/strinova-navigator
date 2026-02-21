@@ -13,11 +13,7 @@ const client = new SapphireClient({
 		level: LogLevel.Debug
 	},
 	shards: 'auto',
-	intents: [
-		GatewayIntentBits.Guilds,
-		GatewayIntentBits.GuildMessages,
-		GatewayIntentBits.MessageContent
-	],
+	intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 	loadMessageCommandListeners: true,
 	tasks: {
 		queue: '{scheduled-tasks}',
@@ -46,7 +42,7 @@ const main = async () => {
 void main();
 
 declare module '@sapphire/framework' {
-	interface Container{
+	interface Container {
 		redis: typeof redis;
 	}
 }

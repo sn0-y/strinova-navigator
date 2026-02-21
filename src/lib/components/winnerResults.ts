@@ -27,7 +27,11 @@ export default (eventId: string, eventUrl: string, eventName: string, winnerMent
 				.addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🎁 It's time for prize collection!\n**Contest:** ${eventName}`))
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
-		.addTextDisplayComponents(new TextDisplayBuilder().setContent(`### Winners:\n${winnerMentions.length > 0 ? winnerMentions.join('\n') : '*No winners could be selected for this event.*'}`))
+		.addTextDisplayComponents(
+			new TextDisplayBuilder().setContent(
+				`### Winners:\n${winnerMentions.length > 0 ? winnerMentions.join('\n') : '*No winners could be selected for this event.*'}`
+			)
+		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
 		.addSectionComponents(
 			new SectionBuilder()
@@ -47,5 +51,7 @@ export default (eventId: string, eventUrl: string, eventName: string, winnerMent
 				)
 		)
 		.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('https://i.imgur.com/SnWIBVd.png'))),
-	new TextDisplayBuilder().setContent(`*This message was generated automatically. If you have any questions or concerns about the prize collection process, please contact the staff team. EventID #${eventId}.*`)
+	new TextDisplayBuilder().setContent(
+		`*This message was generated automatically. If you have any questions or concerns about the prize collection process, please contact the staff team. EventID #${eventId}.*`
+	)
 ];

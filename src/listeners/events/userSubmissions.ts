@@ -6,7 +6,7 @@ import { generateSubmission, getEvent } from 'services/events.service';
 
 @ApplyOptions<Listener.Options>({
 	name: 'event - user submissions',
-	event: Events.MessageCreate,
+	event: Events.MessageCreate
 })
 export class UserEvent extends Listener {
 	public override async run(message: Message) {

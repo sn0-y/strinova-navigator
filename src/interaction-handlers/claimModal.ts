@@ -27,7 +27,7 @@ export class ModalHandler extends InteractionHandler {
 		if (!report) return;
 
 		if (report.missingCount !== 0) return;
-		
+
 		return sendReport(eventId, config.channels.eventNotifications);
 	}
 

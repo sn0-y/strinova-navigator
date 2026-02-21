@@ -7,15 +7,21 @@ import { findWinner, reportSent } from 'services/events.service';
 	interactionHandlerType: InteractionHandlerTypes.Button
 })
 export class ButtonHandler extends InteractionHandler {
-	public async run(interaction: ButtonInteraction, { eventId }: { eventId: number }) {			
+	public async run(interaction: ButtonInteraction, { eventId }: { eventId: number }) {
 		const winner = await findWinner(interaction.user.id, eventId);
-		if (!winner) return interaction.reply({ content: 'Sorry, it seems like you are not a winner for this event or you have already claimed your prize.', flags: ['Ephemeral'] });
+		if (!winner)
+			return interaction.reply({
+				content: 'Sorry, it seems like you are not a winner for this event or you have already claimed your prize.',
+				flags: ['Ephemeral']
+			});
 
-		if (winner.inGameUid) return interaction.reply({ content: `You have already claimed your prize with UID: ${winner.inGameUid}. If you believe this is a mistake, please contact the staff team.`, flags: ['Ephemeral'] });
+		if (winner.inGameUid)
+			return interaction.reply({
+				content: `You have already claimed your prize with UID: ${winner.inGameUid}. If you believe this is a mistake, please contact the staff team.`,
+				flags: ['Ephemeral']
+			});
 
-		const modal = new ModalBuilder()
-			.setCustomId(`event:claim:modal:${eventId}`)
-			.setTitle('Claim Your Prize! 🎁');
+		const modal = new ModalBuilder().setCustomId(`event:claim:modal:${eventId}`).setTitle('Claim Your Prize! 🎁');
 
 		const uidInput = new TextInputBuilder()
 			.setCustomId('uidInput')
@@ -25,10 +31,8 @@ export class ButtonHandler extends InteractionHandler {
 			.setMinLength(5)
 			.setMaxLength(15);
 
-		const label = new LabelBuilder()
-			.setLabel('Strinova ID:')
-			.setTextInputComponent(uidInput);
-		
+		const label = new LabelBuilder().setLabel('Strinova ID:').setTextInputComponent(uidInput);
+
 		modal.addLabelComponents(label);
 		return await interaction.showModal(modal);
 	}
@@ -39,7 +43,7 @@ export class ButtonHandler extends InteractionHandler {
 		const eventId = parseInt(interaction.customId.split(':')[3]);
 		if (isNaN(eventId)) return this.none();
 
-		if (!await reportSent(eventId)) return this.none();
+		if (!(await reportSent(eventId))) return this.none();
 
 		return this.some({ eventId });
 	}

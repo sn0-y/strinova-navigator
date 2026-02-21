@@ -68,14 +68,20 @@ export class UserCommand extends Subcommand {
 						.setName('end')
 						.setDescription('End the currently active event in a channel')
 						.addChannelOption((option) => option.setName('channel').setDescription('The channel to end the event in').setRequired(true))
-						.addIntegerOption((option) => option.setName('winner-count').setDescription('The number of winners to select').setRequired(true))
-						.addChannelOption((option) => option.setName('results-channel').setDescription('The channel to announce the winners in').setRequired(true))
+						.addIntegerOption((option) =>
+							option.setName('winner-count').setDescription('The number of winners to select').setRequired(true)
+						)
+						.addChannelOption((option) =>
+							option.setName('results-channel').setDescription('The channel to announce the winners in').setRequired(true)
+						)
 				)
 				.addSubcommand((subcommand) =>
 					subcommand
 						.setName('report')
 						.setDescription('Compile a report for the most recently ended event in a channel')
-						.addChannelOption((option) => option.setName('channel').setDescription('The channel to compile the report for').setRequired(true))
+						.addChannelOption((option) =>
+							option.setName('channel').setDescription('The channel to compile the report for').setRequired(true)
+						)
 				)
 		);
 	}
@@ -91,8 +97,7 @@ export class UserCommand extends Subcommand {
 		if (!channel.isTextBased()) return interaction.editReply({ content: 'The bot only supports text channels.' });
 
 		const dupeCheck = await checkDuplicateEvent(channel.id);
-		if (dupeCheck)
-			return interaction.editReply({ content: `This event is already being tracked by [${dupeCheck.id} : ${dupeCheck.name}]` });
+		if (dupeCheck) return interaction.editReply({ content: `This event is already being tracked by [${dupeCheck.id} : ${dupeCheck.name}]` });
 
 		const event = await createEvent(channel.id, eventName, requireAttachment, minCharacters);
 		return interaction.editReply({ content: `Started tracking event [${event.id} : ${event.name}] in ${channel.url}` });
@@ -104,11 +109,12 @@ export class UserCommand extends Subcommand {
 		const channel = interaction.options.getChannel('channel', true) as Channel;
 		const winnerCount = interaction.options.getInteger('winner-count', true);
 		const resultsChannel = interaction.options.getChannel('results-channel', true) as Channel;
-	
+
 		const event = await getEvent(channel.id);
 		if (!event) return interaction.editReply({ content: 'There is no active event in this channel.' });
 
-		if (!resultsChannel.isSendable()) return interaction.editReply({ content: 'I do not have permission to send messages in the results channel.' });
+		if (!resultsChannel.isSendable())
+			return interaction.editReply({ content: 'I do not have permission to send messages in the results channel.' });
 
 		const winners = await pickWinners(event.id, winnerCount);
 		if (!winners) return interaction.editReply({ content: 'There was an error selecting winners for the event. Please try again later.' });
@@ -116,16 +122,28 @@ export class UserCommand extends Subcommand {
 		const endResult = await endEvent(event.id, event.channelId);
 		if (!endResult) return interaction.editReply({ content: 'There was an error ending the event. Please try again later.' });
 
-		const deadline = (Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60)
+		const deadline = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
-		await this.container.tasks.create({ name: 'eventReport', payload: {
-			eventId: event.id,
-			eventName: event.name
-		}}, { delay: 7 * 24 * 60 * 60 * 1000, repeated: false });
+		await this.container.tasks.create(
+			{
+				name: 'eventReport',
+				payload: {
+					eventId: event.id,
+					eventName: event.name
+				}
+			},
+			{ delay: 7 * 24 * 60 * 60 * 1000, repeated: false }
+		);
 
 		await resultsChannel.send({
 			flags: ['IsComponentsV2'],
-			components: winnerResults(event.id.toString(), `https://discord.com/channels/${interaction.guildId}/${channel.id}`, event.name, winners.map((winner) => `<@${winner}>`), deadline.toString())
+			components: winnerResults(
+				event.id.toString(),
+				`https://discord.com/channels/${interaction.guildId}/${channel.id}`,
+				event.name,
+				winners.map((winner) => `<@${winner}>`),
+				deadline.toString()
+			)
 		});
 
 		return interaction.editReply({ content: 'Generated successfully' });
@@ -143,6 +161,8 @@ export class UserCommand extends Subcommand {
 		const report = await compileEventReport(event.id);
 		if (!report) return interaction.editReply({ content: 'There was an error compiling the event report.' });
 
-		return interaction.editReply({ content: `Event report for ${event.name} compiled successfully. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}` });
+		return interaction.editReply({
+			content: `Event report for ${event.name} compiled successfully. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}`
+		});
 	}
 }
