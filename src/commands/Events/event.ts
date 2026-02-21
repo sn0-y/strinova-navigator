@@ -2,7 +2,7 @@ import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { Channel } from 'discord.js';
-import { checkDuplicateEvent, compileEventReport, createEvent, endEvent, getEvent, pickWinners } from 'services/events.service';
+import { checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getEvent } from 'services/events.service';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'event',
@@ -116,20 +116,19 @@ export class UserCommand extends Subcommand {
 		if (!resultsChannel.isSendable())
 			return interaction.editReply({ content: 'I do not have permission to send messages in the results channel.' });
 
-		const pickResult = await pickWinners(event.id, winnerCount);
-		if (!pickResult.success) {
-			if (pickResult.error === 'no_participants') {
+		const endResult = await endEventAndPickWinners(event.id, event.channelId, winnerCount);
+		if (!endResult.success) {
+			if (endResult.error === 'not_active') {
+				return interaction.editReply({ content: 'This event is no longer active.' });
+			} else if (endResult.error === 'no_participants') {
 				return interaction.editReply({ content: 'There were no participants in this event.' });
-			} else if (pickResult.error === 'insufficient_participants') {
+			} else if (endResult.error === 'insufficient_participants') {
 				return interaction.editReply({ content: 'There were not enough participants to select the requested number of winners.' });
 			}
-			return interaction.editReply({ content: 'There was an error selecting winners for the event. Please try again later.' });
+			return interaction.editReply({ content: 'There was an error ending the event and selecting winners. Please try again later.' });
 		}
 
-		const winners = pickResult.winners!;
-
-		const endResult = await endEvent(event.id, event.channelId);
-		if (!endResult) return interaction.editReply({ content: 'There was an error ending the event. Please try again later.' });
+		const winners = endResult.winners!;
 
 		const deadline = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 

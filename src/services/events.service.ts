@@ -74,65 +74,69 @@ export async function generateSubmission(eventId: number, messageUrl: string, us
 	return submission;
 }
 
-export async function endEvent(eventId: number, channelId: string) {
+export async function endEventAndPickWinners(eventId: number, channelId: string, winnerCount: number) {
 	try {
-		await prisma.event.update({
-			where: { id: eventId },
-			data: { status: 'ENDED' }
+		const result = await prisma.$transaction(async (tx) => {
+			const event = await tx.event.findUnique({ where: { id: eventId } });
+			if (!event || event.status !== 'ACTIVE') {
+				return { success: false, error: 'not_active' };
+			}
+
+			const participants = await tx.participant.findMany({
+				where: { eventId: eventId }
+			});
+
+			if (participants.length === 0) {
+				container.logger.info(`Event ${eventId} ended with no participants.`);
+				return { success: false, error: 'no_participants' };
+			}
+
+			container.logger.info(`Event ${eventId} ended with ${participants.length} participants.`);
+
+			if (participants.length < winnerCount) {
+				container.logger.info(
+					`Event ${eventId} has ${participants.length} participants, which is less than the winner count of ${winnerCount}. No winners selected.`
+				);
+				return { success: false, error: 'insufficient_participants' };
+			}
+
+			const pool = participants.map((p) => p.userId);
+
+			// Fisher–Yates shuffle to sample without replacement
+			for (let i = pool.length - 1; i > 0; i--) {
+				const j = randomInt(0, i + 1);
+				[pool[i], pool[j]] = [pool[j], pool[i]];
+			}
+
+			const winnerIds = pool.slice(0, winnerCount);
+
+			const winnerData = winnerIds.map((userId) => ({
+				userId: userId,
+				eventId: eventId
+			}));
+
+			await tx.winner.createMany({
+				data: winnerData,
+				skipDuplicates: true
+			});
+
+			await tx.event.update({
+				where: { id: eventId },
+				data: { status: 'ENDED' }
+			});
+
+			return { success: true, winners: winnerIds };
 		});
 
-		await container.redis.del(`event:active:${channelId}`);
+		if (result.success) {
+			await container.redis.del(`event:active:${channelId}`);
+		}
 
-		return true;
+		return result;
 	} catch (error) {
-		container.logger.error(`Error ending event ${eventId}:`, error);
-
-		return false;
+		container.logger.error(`Error ending event ${eventId} and picking winners:`, error);
+		return { success: false, error: 'transaction_failed' };
 	}
-}
-
-export async function pickWinners(eventId: number, winnerCount: number) {
-	const participants = await prisma.participant.findMany({
-		where: { eventId: eventId }
-	});
-
-	if (participants.length === 0) {
-		container.logger.info(`Event ${eventId} ended with no participants.`);
-
-		return { success: false, error: 'no_participants' };
-	}
-
-	container.logger.info(`Event ${eventId} ended with ${participants.length} participants.`);
-
-	if (participants.length < winnerCount) {
-		container.logger.info(
-			`Event ${eventId} has ${participants.length} participants, which is less than the winner count of ${winnerCount}. No winners selected.`
-		);
-
-		return { success: false, error: 'insufficient_participants' };
-	}
-
-	const pool = participants.map((p) => p.userId);
-
-	// Fisher–Yates shuffle to sample without replacement
-	for (let i = pool.length - 1; i > 0; i--) {
-		const j = randomInt(0, i + 1);
-		[pool[i], pool[j]] = [pool[j], pool[i]];
-	}
-
-	const winnerIds = pool.slice(0, winnerCount);
-
-	const winnerData = winnerIds.map((userId) => ({
-		userId: userId,
-		eventId: eventId
-	}));
-
-	await prisma.winner.createMany({
-		data: winnerData,
-		skipDuplicates: true
-	});
-
-	return { success: true, winners: winnerIds };
 }
 
 export async function findWinner(winnerUserId: string, eventId: number) {
