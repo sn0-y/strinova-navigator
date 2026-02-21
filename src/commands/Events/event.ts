@@ -2,7 +2,7 @@ import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { Channel } from 'discord.js';
-import { checkDuplicateEvent, createEvent, endEvent, getEvent, pickWinners } from 'services/events.service';
+import { checkDuplicateEvent, compileEventReport, createEvent, endEvent, getEvent, pickWinners } from 'services/events.service';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'event',
@@ -19,6 +19,12 @@ import { checkDuplicateEvent, createEvent, endEvent, getEvent, pickWinners } fro
 			type: 'method',
 			preconditions: [['StaffOnly', 'LeadModOnly', 'OwnerOnly']],
 			chatInputRun: 'end'
+		},
+		{
+			name: 'report',
+			type: 'method',
+			preconditions: [['StaffOnly', 'LeadModOnly', 'OwnerOnly']],
+			chatInputRun: 'report'
 		}
 	]
 })
@@ -64,6 +70,12 @@ export class UserCommand extends Subcommand {
 						.addChannelOption((option) => option.setName('channel').setDescription('The channel to end the event in').setRequired(true))
 						.addIntegerOption((option) => option.setName('winner-count').setDescription('The number of winners to select').setRequired(true))
 						.addChannelOption((option) => option.setName('results-channel').setDescription('The channel to announce the winners in').setRequired(true))
+				)
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName('report')
+						.setDescription('Compile a report for the most recently ended event in a channel')
+						.addChannelOption((option) => option.setName('channel').setDescription('The channel to compile the report for').setRequired(true))
 				)
 		);
 	}
@@ -117,5 +129,20 @@ export class UserCommand extends Subcommand {
 		})
 
 		return interaction.editReply({ content: 'Generated successfully' });
+	}
+
+	public async report(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const channel = interaction.options.getChannel('channel', true) as Channel;
+
+		const event = await getEvent(channel.id);
+		if (!event) return interaction.editReply({ content: 'There is no active event in this channel.' });
+		if (event.status !== 'ENDED') return interaction.editReply({ content: 'This event has not ended yet.' });
+
+		const report = await compileEventReport(event.id);
+		if (!report) return interaction.editReply({ content: 'There was an error compiling the event report.' });
+
+		return interaction.editReply({ content: `Event report for ${event.name} compiled successfully. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}` });
 	}
 }
