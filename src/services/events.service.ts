@@ -3,6 +3,8 @@ import { randomInt } from 'crypto';
 import { prisma } from 'prisma';
 import { Event } from 'prisma/generated/prisma/client';
 
+const inFlightGetEventRequests = new Map<string, Promise<Event | null>>();
+
 export async function checkDuplicateEvent(channelId: string) {
 	const event = await prisma.event.findFirst({
 		where: {
@@ -33,24 +35,36 @@ export async function createEvent(channelId: string, eventName: string, requireA
 export async function getEvent(channelId: string) {
 	const eventDataRaw = await container.redis.get(`event:active:${channelId}`);
 
-	if (!eventDataRaw) {
-		const event = await prisma.event.findFirst({
-			where: {
-				channelId: channelId
-			}
-		});
-
-		if (!event) return null;
-
-		if (event.status === 'ACTIVE') {
-			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
-		}
-
-		return event;
+	if (eventDataRaw) {
+		return JSON.parse(eventDataRaw) as Event;
 	}
 
-	const eventData = JSON.parse(eventDataRaw) as Event;
-	return eventData;
+	if (inFlightGetEventRequests.has(channelId)) {
+		return inFlightGetEventRequests.get(channelId)!;
+	}
+
+	const promise = (async () => {
+		try {
+			const event = await prisma.event.findFirst({
+				where: {
+					channelId: channelId
+				}
+			});
+
+			if (!event) return null;
+
+			if (event.status === 'ACTIVE') {
+				await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
+			}
+
+			return event;
+		} finally {
+			inFlightGetEventRequests.delete(channelId);
+		}
+	})();
+
+	inFlightGetEventRequests.set(channelId, promise);
+	return promise;
 }
 
 export async function generateSubmission(eventId: number, messageUrl: string, userId: string) {
