@@ -1,0 +1,273 @@
+import { container } from '@sapphire/framework';
+import { randomInt } from 'crypto';
+import { prisma } from 'prisma';
+import { Event } from 'prisma/generated/prisma/client';
+
+const inFlightGetActiveEventRequests = new Map<string, Promise<Event | null>>();
+
+export async function checkDuplicateEvent(channelId: string) {
+	const event = await prisma.event.findFirst({
+		where: {
+			channelId: channelId,
+			status: 'ACTIVE'
+		}
+	});
+
+	return event;
+}
+
+export async function createEvent(channelId: string, eventName: string, requireAttachment: boolean, minCharacters: number) {
+	const event = await prisma.event.create({
+		data: {
+			channelId: channelId,
+			name: eventName,
+			status: 'ACTIVE',
+			requireAttachment: requireAttachment,
+			minCharacters: minCharacters
+		}
+	});
+
+	await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
+
+	return event;
+}
+
+export async function getActiveEvent(channelId: string) {
+	const eventDataRaw = await container.redis.get(`event:active:${channelId}`);
+
+	if (eventDataRaw) {
+		return JSON.parse(eventDataRaw) as Event;
+	}
+
+	if (inFlightGetActiveEventRequests.has(channelId)) {
+		return inFlightGetActiveEventRequests.get(channelId)!;
+	}
+
+	const promise = (async () => {
+		try {
+			const event = await prisma.event.findFirst({
+				where: {
+					channelId: channelId,
+					status: 'ACTIVE'
+				},
+				orderBy: {
+					createdAt: 'desc'
+				}
+			});
+
+			if (!event) return null;
+
+			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
+
+			return event;
+		} finally {
+			inFlightGetActiveEventRequests.delete(channelId);
+		}
+	})();
+
+	inFlightGetActiveEventRequests.set(channelId, promise);
+	return promise;
+}
+
+export async function getLatestEvent(channelId: string) {
+	const event = await prisma.event.findFirst({
+		where: {
+			channelId: channelId
+		},
+		orderBy: {
+			createdAt: 'desc'
+		}
+	});
+
+	return event;
+}
+
+export async function generateSubmission(eventId: number, messageUrl: string, userId: string) {
+	const submission = await prisma.participant.upsert({
+		where: {
+			userId_eventId: {
+				eventId: eventId,
+				userId: userId
+			}
+		},
+		update: {
+			submissionLink: messageUrl
+		},
+		create: {
+			submissionLink: messageUrl,
+			eventId: eventId,
+			userId: userId
+		}
+	});
+
+	return submission;
+}
+
+export async function endEventAndPickWinners(eventId: number, channelId: string, winnerCount: number) {
+	try {
+		const result = await prisma.$transaction(async (tx) => {
+			const event = await tx.event.findUnique({ where: { id: eventId } });
+			if (!event || event.status !== 'ACTIVE') {
+				return { success: false, error: 'not_active' };
+			}
+
+			const participants = await tx.participant.findMany({
+				where: { eventId: eventId }
+			});
+
+			if (participants.length === 0) {
+				container.logger.info(`Event ${eventId} ended with no participants.`);
+				return { success: false, error: 'no_participants' };
+			}
+
+			container.logger.info(`Event ${eventId} ended with ${participants.length} participants.`);
+
+			if (participants.length < winnerCount) {
+				container.logger.info(
+					`Event ${eventId} has ${participants.length} participants, which is less than the winner count of ${winnerCount}. No winners selected.`
+				);
+				return { success: false, error: 'insufficient_participants' };
+			}
+
+			const pool = participants.map((p) => p.userId);
+
+			// Fisher–Yates shuffle to sample without replacement
+			for (let i = pool.length - 1; i > 0; i--) {
+				const j = randomInt(0, i + 1);
+				[pool[i], pool[j]] = [pool[j], pool[i]];
+			}
+
+			const winnerIds = pool.slice(0, winnerCount);
+
+			const winnerData = winnerIds.map((userId) => ({
+				userId: userId,
+				eventId: eventId
+			}));
+
+			await tx.winner.createMany({
+				data: winnerData,
+				skipDuplicates: true
+			});
+
+			await tx.event.update({
+				where: { id: eventId },
+				data: { status: 'ENDED' }
+			});
+
+			return { success: true, winners: winnerIds };
+		});
+
+		if (result.success) {
+			await container.redis.del(`event:active:${channelId}`);
+		}
+
+		return result;
+	} catch (error) {
+		container.logger.error(`Error ending event ${eventId} and picking winners:`, error);
+		return { success: false, error: 'transaction_failed' };
+	}
+}
+
+export async function findWinner(winnerUserId: string, eventId: number) {
+	const winner = await prisma.winner.findFirst({
+		where: {
+			userId: winnerUserId,
+			eventId: eventId
+		}
+	});
+
+	return winner;
+}
+
+export async function submitWinnerUid(winnerUserId: string, eventId: number, inGameUid: string) {
+	if (!inGameUid || !/^\d{5,15}$/.test(inGameUid)) {
+		return { success: false, error: 'Invalid UID format. Please ensure your UID only contains numbers and is between 5 and 15 digits long.' };
+	}
+
+	const winner = await prisma.winner.findFirst({
+		where: {
+			userId: winnerUserId,
+			eventId: eventId
+		}
+	});
+
+	if (!winner) return { success: false, error: 'You are not a winner for this event.' };
+
+	try {
+		await prisma.winner.update({
+			where: { userId_eventId: { userId: winnerUserId, eventId: eventId } },
+			data: { inGameUid, claimedAt: new Date() }
+		});
+	} catch (error: any) {
+		if (error.code === 'P2002') {
+			return { success: false, error: 'This UID has already been claimed for this event.' };
+		}
+		throw error;
+	}
+
+	return { success: true };
+}
+
+export async function compileEventReport(eventId: number) {
+	const event = await prisma.event.findUnique({ where: { id: eventId } });
+	if (!event || event.reportSent) return null;
+
+	const winners = await prisma.winner.findMany({
+		where: {
+			eventId: eventId
+		}
+	});
+
+	let csvContent = 'Discord ID,Strinova ID,Claimed At\n';
+	let missingCount = 0;
+
+	for (const winner of winners) {
+		const uid = winner.inGameUid || 'MISSING';
+		const date = winner.claimedAt ? winner.claimedAt.toISOString() : 'N/A';
+		csvContent += `${winner.userId},${uid},${date}\n`;
+
+		if (!winner.inGameUid) missingCount++;
+	}
+
+	return {
+		csvContent,
+		eventName: event.name,
+		missingCount
+	};
+}
+
+export async function sendReport(eventId: number, channelId: string) {
+	const channel = await container.client.channels.fetch(channelId).catch(() => null);
+	if (!channel?.isSendable()) {
+		container.logger.error(`Unable to send event report for Event ${eventId} - channel ${channelId} is not sendable.`);
+		return false;
+	}
+
+	const report = await compileEventReport(eventId);
+	if (!report) {
+		container.logger.error(`Unable to compile event report for Event ${eventId}.`);
+		return false;
+	}
+
+	const attachment = {
+		name: `event-${eventId}-report.csv`,
+		attachment: Buffer.from(report.csvContent, 'utf-8')
+	};
+
+	await channel.send({
+		content: `The event **${report.eventName}** has ended. Here is the report of winners. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}`,
+		files: [attachment]
+	});
+
+	await prisma.event.update({
+		where: { id: eventId },
+		data: { reportSent: true }
+	});
+
+	return true;
+}
+
+export async function reportSent(eventId: number) {
+	const event = await prisma.event.findUnique({ where: { id: eventId } });
+	return event?.reportSent || false;
+}
