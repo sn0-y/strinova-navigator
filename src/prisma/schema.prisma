@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated/prisma"
+  runtime  = "bun"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Event {
+  id                Int           @id @default(autoincrement())
+  name              String
+  channelId         String
+  status            EventStatus   @default(ACTIVE)
+  createdAt         DateTime      @default(now())
+  minCharacters     Int           @default(0)
+  requireAttachment Boolean       @default(false)
+  participants      Participant[]
+  winners           Winner[]
+  
+  reportSent        Boolean       @default(false)
+  resultChannelId   String?
+
+  @@index([channelId, status])
+}
+
+model Participant {
+  userId         String
+  eventId        Int
+  submissionLink String?
+  event          Event   @relation(fields: [eventId], references: [id])
+
+  @@id([userId, eventId])
+  @@index([eventId])
+}
+
+model Winner {
+  userId    String
+  eventId   Int
+  inGameUid String?
+  claimedAt DateTime?
+  event     Event     @relation(fields: [eventId], references: [id])
+
+  @@id([userId, eventId])
+  @@index([eventId])
+  @@unique([eventId, inGameUid])
+}
+
+enum EventStatus {
+  ACTIVE
+  ENDED
+  ARCHIVED
+}

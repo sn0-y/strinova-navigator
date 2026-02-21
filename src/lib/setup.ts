@@ -6,6 +6,7 @@ import '@sapphire/plugin-api/register';
 import '@sapphire/plugin-editable-commands/register';
 import '@sapphire/plugin-logger/register';
 import '@sapphire/plugin-subcommands/register';
+import '@sapphire/plugin-scheduled-tasks/register';
 import { setup, type ArrayString } from '@skyra/env-utilities';
 import * as colorette from 'colorette';
 import { join } from 'path';
@@ -27,5 +28,8 @@ colorette.createColors({ useColor: true });
 declare module '@skyra/env-utilities' {
 	interface Env {
 		OWNERS: ArrayString;
+		// Storage connection strings
+		DATABASE_URL: string;
+		REDIS_URL: string;
 	}
 }
