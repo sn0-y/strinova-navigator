@@ -236,3 +236,8 @@ export async function sendReport(eventId: number, channelId: string) {
 
 	return true;
 }
+
+export async function reportSent(eventId: number) {
+	const event = await prisma.event.findUnique({ where: { id: eventId } });
+	return event?.reportSent || false;
+}

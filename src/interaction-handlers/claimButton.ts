@@ -1,13 +1,13 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { InteractionHandler, InteractionHandlerTypes } from '@sapphire/framework';
 import { LabelBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction } from 'discord.js';
-import { findWinner } from 'services/events.service';
+import { findWinner, reportSent } from 'services/events.service';
 
 @ApplyOptions<InteractionHandler.Options>({
 	interactionHandlerType: InteractionHandlerTypes.Button
 })
 export class ButtonHandler extends InteractionHandler {
-	public async run(interaction: ButtonInteraction, { eventId }: { eventId: number }) {		
+	public async run(interaction: ButtonInteraction, { eventId }: { eventId: number }) {			
 		const winner = await findWinner(interaction.user.id, eventId);
 		if (!winner) return interaction.reply({ content: 'Sorry, it seems like you are not a winner for this event or you have already claimed your prize.', flags: ['Ephemeral'] });
 
@@ -38,6 +38,8 @@ export class ButtonHandler extends InteractionHandler {
 
 		const eventId = parseInt(interaction.customId.split(':')[3]);
 		if (isNaN(eventId)) return this.none();
+
+		if (!reportSent(eventId)) return this.none();
 
 		return this.some({ eventId });
 	}
