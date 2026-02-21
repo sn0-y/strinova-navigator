@@ -47,4 +47,5 @@ export default (eventId: string, eventUrl: string, eventName: string, winnerMent
 				)
 		)
 		.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('https://i.imgur.com/SnWIBVd.png'))),
+	new TextDisplayBuilder().setContent(`*This message was generated automatically. If you have any questions or concerns about the prize collection process, please contact the staff team. EventID #${eventId}.*`)
 ];
