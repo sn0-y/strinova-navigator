@@ -7,7 +7,12 @@ setup({ path: join(process.cwd(), '.env') });
 
 const connectionString = `${process.env.DATABASE_URL}`
 
-const adapter = new PrismaPg({ connectionString })
+const adapter = new PrismaPg({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+})
 const prisma = new PrismaClient({ adapter })
 
 export { prisma }

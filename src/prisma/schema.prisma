@@ -1,12 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client"
   output   = "./generated/prisma"
+  runtime  = "bun"
 }
 
 datasource db {
@@ -14,34 +9,35 @@ datasource db {
 }
 
 model Event {
-  id             Int       @id @default(autoincrement())
-  name           String
-  channelId      String    // The channel/thread created for this event
-  status         EventStatus @default(ACTIVE)
-  createdAt      DateTime  @default(now())
-
-  requireAttachment Boolean   @default(false)
-  minCharacters     Int       @default(0)
+  id                Int           @id @default(autoincrement())
+  name              String
+  channelId         String
+  status            EventStatus   @default(ACTIVE)
+  createdAt         DateTime      @default(now())
+  minCharacters     Int           @default(0)
+  requireAttachment Boolean       @default(false)
+  participants      Participant[]
+  winners           Winner[]
   
-  participants   Participant[]
-  winners        Winner[]
+  reportSent        Boolean       @default(false)
+  resultChannelId   String?
 }
 
 model Participant {
   userId         String
   eventId        Int
-  submissionLink String?   // Link to their message/image
-  event          Event     @relation(fields: [eventId], references: [id])
+  submissionLink String?
+  event          Event   @relation(fields: [eventId], references: [id])
 
-  @@id([userId, eventId]) // Composite key: A user can only join an event once
+  @@id([userId, eventId])
 }
 
 model Winner {
-  userId         String
-  eventId        Int
-  inGameUid      String?   // Null until they submit it
-  claimedAt      DateTime? 
-  event          Event     @relation(fields: [eventId], references: [id])
+  userId    String
+  eventId   Int
+  inGameUid String?
+  claimedAt DateTime?
+  event     Event     @relation(fields: [eventId], references: [id])
 
   @@id([userId, eventId])
 }

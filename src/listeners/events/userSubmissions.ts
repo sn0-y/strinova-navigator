@@ -2,7 +2,7 @@ import { ApplyOptions } from '@sapphire/decorators';
 import { Events, Listener } from '@sapphire/framework';
 import { config } from 'config';
 import { Message } from 'discord.js';
-import { generateSubmission, getActiveEvent } from 'services/events.service';
+import { generateSubmission, getEvent } from 'services/events.service';
 
 @ApplyOptions<Listener.Options>({
 	name: 'event - user submissions',
@@ -13,7 +13,7 @@ export class UserEvent extends Listener {
 		if (message.author.bot) return;
 		if (message.member?.roles.cache.hasAny(config.roles.staff, config.roles.leadmod)) return;
 
-		const event = await getActiveEvent(message.channelId);
+		const event = await getEvent(message.channelId);
 		if (!event) return;
 
 		// Check if submission meets requirements

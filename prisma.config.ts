@@ -4,7 +4,7 @@ import { setup } from '@skyra/env-utilities';
 import { join } from 'path';
 import { defineConfig } from "prisma/config";
 
-setup({ path: join(process.cwd(), '.env') });
+setup({ path: join(process.cwd(), '.env.local') });
 
 export default defineConfig({
   schema: "src/prisma/schema.prisma",

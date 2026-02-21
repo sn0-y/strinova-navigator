@@ -1,11 +1,12 @@
-import { redis } from '#lib/redis';
 import './lib/setup';
 
 import { container, LogLevel, SapphireClient } from '@sapphire/framework';
+import { redis } from 'bun';
 import { config } from 'config';
 import { GatewayIntentBits } from 'discord.js';
 
 const client = new SapphireClient({
+	baseUserDirectory: __dirname,
 	defaultPrefix: config.prefix,
 	caseInsensitiveCommands: true,
 	logger: {
@@ -19,6 +20,7 @@ const client = new SapphireClient({
 	],
 	loadMessageCommandListeners: true,
 	tasks: {
+		queue: '{scheduled-tasks}',
 		bull: {
 			connection: {
 				url: process.env.REDIS_URL

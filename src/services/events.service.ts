@@ -1,4 +1,5 @@
 import { container } from '@sapphire/framework';
+import { randomInt } from 'crypto';
 import { prisma } from 'prisma';
 import { Event } from 'prisma/generated/prisma/client';
 
@@ -29,31 +30,209 @@ export async function createEvent(channelId: string, eventName: string, requireA
 	return event;
 }
 
-export async function getActiveEvent(channelId: string) {
+export async function getEvent(channelId: string) {
 	const eventDataRaw = await container.redis.get(`event:active:${channelId}`);
-	if (!eventDataRaw) return;
+
+	if (!eventDataRaw) {
+		const event = await prisma.event.findFirst({
+			where: {
+				channelId: channelId
+			}
+		});
+
+		if (!event) return null;
+
+		if (event.status === 'ACTIVE') {
+			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event));
+		}
+
+		return event;
+	}
 
 	const eventData = JSON.parse(eventDataRaw) as Event;
 	return eventData;
 }
 
 export async function generateSubmission(eventId: number, messageUrl: string, userId: string) {
-    const submission = await prisma.participant.upsert({
-        where: {
-            userId_eventId: {
-                eventId: eventId,
-                userId: userId
-            }
-        },
-        update: {
-            submissionLink: messageUrl
-        },
-        create: {
-            submissionLink: messageUrl,
-            eventId: eventId,
-            userId: userId
-        }
-    });
+	const submission = await prisma.participant.upsert({
+		where: {
+			userId_eventId: {
+				eventId: eventId,
+				userId: userId
+			}
+		},
+		update: {
+			submissionLink: messageUrl
+		},
+		create: {
+			submissionLink: messageUrl,
+			eventId: eventId,
+			userId: userId
+		}
+	});
 
-    return submission;
+	return submission;
+}
+
+export async function endEvent(eventId: number, channelId: string) {
+	try {
+		await container.redis.del(`event:active:${channelId}`);
+
+		await prisma.event.update({
+			where: { id: eventId },
+			data: { status: 'ENDED' }
+		});
+
+		return true;
+	} catch (error) {
+		container.logger.error(`Error ending event ${eventId}:`, error);
+
+		return false;
+	}
+}
+
+export async function pickWinners(eventId: number, winnerCount: number) {
+	const participants = await prisma.participant.findMany({
+		where: { eventId: eventId }
+	});
+
+	if (participants.length === 0) {
+		container.logger.info(`Event ${eventId} ended with no participants.`);
+
+		return null;
+	}
+
+	container.logger.info(`Event ${eventId} ended with ${participants.length} participants.`);
+
+	if (participants.length < winnerCount) {
+		container.logger.info(
+			`Event ${eventId} has ${participants.length} participants, which is less than the winner count of ${winnerCount}. No winners selected.`
+		);
+
+		return null;
+	}
+
+	const pool = participants.map((p) => p.userId);
+	const winners = new Set<string>();
+
+	let attempts = 0;
+	const maxAttempts = winnerCount * 10;
+
+	while (winners.size < winnerCount && attempts < maxAttempts) {
+		const randomIndex = randomInt(0, pool.length);
+		winners.add(pool[randomIndex]);
+
+		attempts++;
+	}
+
+	const winnerIds = Array.from(winners);
+
+	const winnerData = winnerIds.map((userId) => ({
+		userId: userId,
+		eventId: eventId
+	}));
+
+	await prisma.winner.createMany({
+		data: winnerData,
+		skipDuplicates: true
+	});
+
+	return winnerIds;
+}
+
+export async function findWinner(winnerUserId: string, eventId: number) {
+	const winner = await prisma.winner.findFirst({
+		where: {
+			userId: winnerUserId,
+			eventId: eventId
+		}
+	});
+
+	return winner;
+}
+
+export async function submitWinnerUid(winnerUserId: string, eventId: number, inGameUid: string) {
+	const dupeCheck = await prisma.winner.findFirst({
+		where: {
+			inGameUid: inGameUid,
+			eventId: eventId
+		}
+	});
+
+	if (dupeCheck) return false;
+
+	const winner = await prisma.winner.findFirst({
+		where: {
+			userId: winnerUserId,
+			eventId: eventId
+		}
+	});
+
+	if (!winner) return false;
+
+	await prisma.winner.update({
+		where: { userId_eventId: { userId: winnerUserId, eventId: eventId } },
+		data: { inGameUid }
+	});
+
+	return true;
+}
+
+export async function compileEventReport(eventId: number) {
+	const event = await prisma.event.findUnique({ where: { id: eventId } });
+	if (!event || event.reportSent) return null;
+
+	const winners = await prisma.winner.findMany({
+		where: {
+			eventId: eventId
+		}
+	});
+
+	let csvContent = 'Discord ID, Strinova ID\n';
+	let missingCount = 0;
+
+	for (const winner of winners) {
+		const uid = winner.inGameUid || 'MISSING';
+		const date = winner.claimedAt ? winner.claimedAt.toISOString() : 'N/A';
+		csvContent += `${winner.userId},${uid},${date}\n`;
+
+		if (!winner.inGameUid) missingCount++;
+	}
+
+	return {
+		csvContent,
+		eventName: event.name,
+		missingCount
+	};
+}
+
+export async function sendReport(eventId: number, channelId: string) {
+	const channel = await container.client.channels.fetch(channelId).catch(() => null);
+	if (!channel?.isSendable()) {
+		container.logger.error(`Unable to send event report for Event ${eventId} - channel ${channelId} is not sendable.`);
+		return false;
+	}
+
+	const report = await compileEventReport(eventId);
+	if (!report) {
+		container.logger.error(`Unable to compile event report for Event ${eventId}.`);
+		return false;
+	}
+
+	await prisma.event.update({
+		where: { id: eventId },
+		data: { reportSent: true }
+	});
+
+	const attachment = {
+		name: `event-${eventId}-report.csv`,
+		attachment: Buffer.from(report.csvContent, 'utf-8')
+	};
+
+	await channel.send({
+		content: `The event **${report.eventName}** has ended. Here is the report of winners. ${report.missingCount > 0 ? `There were ${report.missingCount} winners without an in-game UID.` : ''}`,
+		files: [attachment]
+	});
+
+	return true;
 }
