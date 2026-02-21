@@ -76,12 +76,12 @@ export async function generateSubmission(eventId: number, messageUrl: string, us
 
 export async function endEvent(eventId: number, channelId: string) {
 	try {
-		await container.redis.del(`event:active:${channelId}`);
-
 		await prisma.event.update({
 			where: { id: eventId },
 			data: { status: 'ENDED' }
 		});
+
+		await container.redis.del(`event:active:${channelId}`);
 
 		return true;
 	} catch (error) {
@@ -99,7 +99,7 @@ export async function pickWinners(eventId: number, winnerCount: number) {
 	if (participants.length === 0) {
 		container.logger.info(`Event ${eventId} ended with no participants.`);
 
-		return null;
+		return { success: false, error: 'no_participants' };
 	}
 
 	container.logger.info(`Event ${eventId} ended with ${participants.length} participants.`);
@@ -109,7 +109,7 @@ export async function pickWinners(eventId: number, winnerCount: number) {
 			`Event ${eventId} has ${participants.length} participants, which is less than the winner count of ${winnerCount}. No winners selected.`
 		);
 
-		return null;
+		return { success: false, error: 'insufficient_participants' };
 	}
 
 	const pool = participants.map((p) => p.userId);
@@ -132,7 +132,7 @@ export async function pickWinners(eventId: number, winnerCount: number) {
 		skipDuplicates: true
 	});
 
-	return winnerIds;
+	return { success: true, winners: winnerIds };
 }
 
 export async function findWinner(winnerUserId: string, eventId: number) {

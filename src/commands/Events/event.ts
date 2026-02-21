@@ -116,8 +116,17 @@ export class UserCommand extends Subcommand {
 		if (!resultsChannel.isSendable())
 			return interaction.editReply({ content: 'I do not have permission to send messages in the results channel.' });
 
-		const winners = await pickWinners(event.id, winnerCount);
-		if (!winners) return interaction.editReply({ content: 'There was an error selecting winners for the event. Please try again later.' });
+		const pickResult = await pickWinners(event.id, winnerCount);
+		if (!pickResult.success) {
+			if (pickResult.error === 'no_participants') {
+				return interaction.editReply({ content: 'There were no participants in this event.' });
+			} else if (pickResult.error === 'insufficient_participants') {
+				return interaction.editReply({ content: 'There were not enough participants to select the requested number of winners.' });
+			}
+			return interaction.editReply({ content: 'There was an error selecting winners for the event. Please try again later.' });
+		}
+
+		const winners = pickResult.winners!;
 
 		const endResult = await endEvent(event.id, event.channelId);
 		if (!endResult) return interaction.editReply({ content: 'There was an error ending the event. Please try again later.' });
