@@ -43,7 +43,7 @@ export class ButtonHandler extends InteractionHandler {
 		const eventId = parseInt(interaction.customId.split(':')[3]);
 		if (isNaN(eventId)) return this.none();
 
-		if (!(await reportSent(eventId))) return this.none();
+		if (await reportSent(eventId)) return this.none();
 
 		return this.some({ eventId });
 	}
