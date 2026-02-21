@@ -24,6 +24,10 @@ export class UserEvent extends Listener {
 		if (!meetsAttachmentRequirement || !meetsCharacterRequirement) return;
 
 		// Generate Submission
-		return await generateSubmission(event.id, message.url, message.author.id);
+		try {
+			return await generateSubmission(event.id, message.url, message.author.id);
+		} catch (error) {
+			this.container.logger.error(`Failed to generate submission for user ${message.author.id} in event ${event.id}:`, error);
+		}
 	}
 }

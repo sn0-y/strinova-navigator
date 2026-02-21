@@ -27,7 +27,10 @@ const client = new SapphireClient({
 
 const main = async () => {
 	try {
+		client.logger.info('Connecting to Redis...');
+		await redis.ping();
 		container.redis = redis;
+		client.logger.info('Connected to Redis!');
 
 		client.logger.info('Logging in...');
 		await client.login();
