@@ -124,16 +124,20 @@ export class UserCommand extends Subcommand {
 
 		const deadline = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
 
-		await this.container.tasks.create(
-			{
-				name: 'eventReport',
-				payload: {
-					eventId: event.id,
-					eventName: event.name
-				}
-			},
-			{ delay: 7 * 24 * 60 * 60 * 1000, repeated: false }
-		);
+		try {
+			await this.container.tasks.create(
+				{
+					name: 'eventReport',
+					payload: {
+						eventId: event.id,
+						eventName: event.name
+					}
+				},
+				{ delay: 7 * 24 * 60 * 60 * 1000, repeated: false }
+			);
+		} catch (error) {
+			this.container.logger.error(`Failed to create scheduled task for event ${event.id}:`, error);
+		}
 
 		await resultsChannel.send({
 			flags: ['IsComponentsV2'],
