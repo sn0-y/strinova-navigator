@@ -29,7 +29,7 @@ export default (eventId: string, eventUrl: string, eventName: string, winnerMent
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
 		.addTextDisplayComponents(
 			new TextDisplayBuilder().setContent(
-				`### Winners:\n${winnerMentions.length > 0 ? winnerMentions.join('\n') : '*No winners could be selected for this event.*'}`
+				`### Winners:\n${winnerMentions.length > 0 ? winnerMentions.join(' ') : '*No winners could be selected for this event.*'}`
 			)
 		)
 		.addSeparatorComponents(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true))
