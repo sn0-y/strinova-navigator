@@ -48,8 +48,8 @@ export class UserCommand extends Subcommand {
 							option //
 								.setName('channel')
 								.setDescription('The channel to track the event in')
-								.setRequired(true)
-								.addChannelTypes(ChannelType.GuildText, ChannelType.PublicThread)
+								.setRequired(false)
+								.addChannelTypes(ChannelType.GuildText, ChannelType.PublicThread, ChannelType.PrivateThread)
 						)
 						.addBooleanOption((option) =>
 							option //
@@ -91,7 +91,7 @@ export class UserCommand extends Subcommand {
 		await interaction.deferReply({ flags: ['Ephemeral'] });
 
 		const eventName = interaction.options.getString('event-name', true);
-		const channel = interaction.options.getChannel('channel', true) as Channel;
+		const channel = (interaction.options.getChannel('channel', false) ?? interaction.channel) as Channel;
 		const requireAttachment = interaction.options.getBoolean('require-attachment', false) ?? false;
 		const minCharacters = interaction.options.getInteger('min-characters', false) ?? 0;
 
