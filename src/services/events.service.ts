@@ -151,15 +151,6 @@ export async function submitWinnerUid(winnerUserId: string, eventId: number, inG
 		return { success: false, error: 'Invalid UID format. Please ensure your UID only contains numbers and is between 5 and 15 digits long.' };
 	}
 
-	const dupeCheck = await prisma.winner.findFirst({
-		where: {
-			inGameUid: inGameUid,
-			eventId: eventId
-		}
-	});
-
-	if (dupeCheck) return { success: false, error: 'This UID has already been claimed for this event.' };
-
 	const winner = await prisma.winner.findFirst({
 		where: {
 			userId: winnerUserId,
@@ -169,10 +160,17 @@ export async function submitWinnerUid(winnerUserId: string, eventId: number, inG
 
 	if (!winner) return { success: false, error: 'You are not a winner for this event.' };
 
-	await prisma.winner.update({
-		where: { userId_eventId: { userId: winnerUserId, eventId: eventId } },
-		data: { inGameUid, claimedAt: new Date() }
-	});
+	try {
+		await prisma.winner.update({
+			where: { userId_eventId: { userId: winnerUserId, eventId: eventId } },
+			data: { inGameUid, claimedAt: new Date() }
+		});
+	} catch (error: any) {
+		if (error.code === 'P2002') {
+			return { success: false, error: 'This UID has already been claimed for this event.' };
+		}
+		throw error;
+	}
 
 	return { success: true };
 }

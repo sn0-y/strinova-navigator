@@ -42,6 +42,7 @@ model Winner {
 
   @@id([userId, eventId])
   @@index([eventId])
+  @@unique([eventId, inGameUid])
 }
 
 enum EventStatus {
