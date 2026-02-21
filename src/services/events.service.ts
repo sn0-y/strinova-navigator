@@ -25,7 +25,7 @@ export async function createEvent(channelId: string, eventName: string, requireA
 		}
 	});
 
-	await container.redis.set(`event:active:${channelId}`, JSON.stringify(event));
+	await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
 
 	return event;
 }
@@ -43,7 +43,7 @@ export async function getEvent(channelId: string) {
 		if (!event) return null;
 
 		if (event.status === 'ACTIVE') {
-			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event));
+			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
 		}
 
 		return event;
