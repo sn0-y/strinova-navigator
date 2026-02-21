@@ -126,7 +126,7 @@ export class UserCommand extends Subcommand {
 		await resultsChannel.send({
 			flags: ['IsComponentsV2'],
 			components: winnerResults(event.id.toString(), `https://discord.com/channels/${interaction.guildId}/${channel.id}`, event.name, winners.map((winner) => `<@${winner}>`), deadline.toString())
-		})
+		});
 
 		return interaction.editReply({ content: 'Generated successfully' });
 	}
