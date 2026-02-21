@@ -6,6 +6,6 @@ export const config = {
         leadmod: '1182953730572820562',
     },
     channels: {
-        eventNotifications: '1474670656867008624',
+        eventNotifications: '1307316881492938822',
     }
 }
