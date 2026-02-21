@@ -3,7 +3,7 @@ import { randomInt } from 'crypto';
 import { prisma } from 'prisma';
 import { Event } from 'prisma/generated/prisma/client';
 
-const inFlightGetEventRequests = new Map<string, Promise<Event | null>>();
+const inFlightGetActiveEventRequests = new Map<string, Promise<Event | null>>();
 
 export async function checkDuplicateEvent(channelId: string) {
 	const event = await prisma.event.findFirst({
@@ -32,39 +32,54 @@ export async function createEvent(channelId: string, eventName: string, requireA
 	return event;
 }
 
-export async function getEvent(channelId: string) {
+export async function getActiveEvent(channelId: string) {
 	const eventDataRaw = await container.redis.get(`event:active:${channelId}`);
 
 	if (eventDataRaw) {
 		return JSON.parse(eventDataRaw) as Event;
 	}
 
-	if (inFlightGetEventRequests.has(channelId)) {
-		return inFlightGetEventRequests.get(channelId)!;
+	if (inFlightGetActiveEventRequests.has(channelId)) {
+		return inFlightGetActiveEventRequests.get(channelId)!;
 	}
 
 	const promise = (async () => {
 		try {
 			const event = await prisma.event.findFirst({
 				where: {
-					channelId: channelId
+					channelId: channelId,
+					status: 'ACTIVE'
+				},
+				orderBy: {
+					createdAt: 'desc'
 				}
 			});
 
 			if (!event) return null;
 
-			if (event.status === 'ACTIVE') {
-				await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
-			}
+			await container.redis.set(`event:active:${channelId}`, JSON.stringify(event), 'EX', 86400);
 
 			return event;
 		} finally {
-			inFlightGetEventRequests.delete(channelId);
+			inFlightGetActiveEventRequests.delete(channelId);
 		}
 	})();
 
-	inFlightGetEventRequests.set(channelId, promise);
+	inFlightGetActiveEventRequests.set(channelId, promise);
 	return promise;
+}
+
+export async function getLatestEvent(channelId: string) {
+	const event = await prisma.event.findFirst({
+		where: {
+			channelId: channelId
+		},
+		orderBy: {
+			createdAt: 'desc'
+		}
+	});
+
+	return event;
 }
 
 export async function generateSubmission(eventId: number, messageUrl: string, userId: string) {

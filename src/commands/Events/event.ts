@@ -2,7 +2,7 @@ import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { Channel } from 'discord.js';
-import { checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getEvent } from 'services/events.service';
+import { checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getActiveEvent, getLatestEvent } from 'services/events.service';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'event',
@@ -110,7 +110,7 @@ export class UserCommand extends Subcommand {
 		const winnerCount = interaction.options.getInteger('winner-count', true);
 		const resultsChannel = interaction.options.getChannel('results-channel', true) as Channel;
 
-		const event = await getEvent(channel.id);
+		const event = await getActiveEvent(channel.id);
 		if (!event) return interaction.editReply({ content: 'There is no active event in this channel.' });
 
 		if (!resultsChannel.isSendable())
@@ -166,8 +166,8 @@ export class UserCommand extends Subcommand {
 
 		const channel = interaction.options.getChannel('channel', true) as Channel;
 
-		const event = await getEvent(channel.id);
-		if (!event) return interaction.editReply({ content: 'There is no active event in this channel.' });
+		const event = await getLatestEvent(channel.id);
+		if (!event) return interaction.editReply({ content: 'There is no event in this channel.' });
 		if (event.status !== 'ENDED') return interaction.editReply({ content: 'This event has not ended yet.' });
 
 		const report = await compileEventReport(event.id);
