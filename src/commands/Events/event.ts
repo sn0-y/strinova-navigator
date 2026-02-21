@@ -49,7 +49,7 @@ export class UserCommand extends Subcommand {
 								.setName('channel')
 								.setDescription('The channel to track the event in')
 								.setRequired(true)
-								.addChannelTypes(ChannelType.GuildText, ChannelType.PublicThread)
+								.addChannelTypes(ChannelType.GuildText, ChannelType.PublicThread, ChannelType.PrivateThread)
 						)
 						.addBooleanOption((option) =>
 							option //
