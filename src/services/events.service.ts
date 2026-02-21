@@ -167,7 +167,7 @@ export async function submitWinnerUid(winnerUserId: string, eventId: number, inG
 
 	await prisma.winner.update({
 		where: { userId_eventId: { userId: winnerUserId, eventId: eventId } },
-		data: { inGameUid }
+		data: { inGameUid, claimedAt: new Date() }
 	});
 
 	return true;
