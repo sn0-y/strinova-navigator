@@ -8,6 +8,8 @@ datasource db {
   provider = "postgresql"
 }
 
+// Event System
+
 model Event {
   id                Int           @id @default(autoincrement())
   name              String
@@ -18,9 +20,9 @@ model Event {
   requireAttachment Boolean       @default(false)
   participants      Participant[]
   winners           Winner[]
-  
-  reportSent        Boolean       @default(false)
-  resultChannelId   String?
+
+  reportSent      Boolean @default(false)
+  resultChannelId String?
 
   @@index([channelId, status])
 }
@@ -43,12 +45,65 @@ model Winner {
   event     Event     @relation(fields: [eventId], references: [id])
 
   @@id([userId, eventId])
-  @@index([eventId])
   @@unique([eventId, inGameUid])
+  @@index([eventId])
 }
 
 enum EventStatus {
   ACTIVE
   ENDED
   ARCHIVED
+}
+
+// Mod Reward System
+
+model Moderator {
+  userId      String  @id
+  currentTier Int     @default(3)
+  isExempt    Boolean @default(false)
+
+  activities  ModActivity[]
+  tierHistory TierHistory[]
+}
+
+model ModActivity {
+  id        Int       @id @default(autoincrement())
+  userId    String
+  moderator Moderator @relation(fields: [userId], references: [userId])
+
+  recordedAt DateTime @default(now())
+
+  type        ActivityType
+  value       Int          @default(1)
+  source      String
+  referenceId String?
+
+  actionDetail ActionDetail?
+}
+
+model TierHistory {
+  id        Int       @id @default(autoincrement())
+  userId    String
+  moderator Moderator @relation(fields: [userId], references: [userId])
+
+  weekStartDate DateTime
+  oldTier       Int
+  newTier       Int
+  reason        String // "Automated Weekly Drop", "Manual Override", "Maintained"
+}
+
+enum ActivityType {
+  PUBLIC_CHAT
+  MOD_CHAT
+  VOICE_MINUTES
+  CASE_HANDLED
+  TICKET_HANDLED
+}
+
+enum ActionDetail {
+  WARN
+  MUTE
+  KICK
+  BAN
+  CLOSE_TICKET
 }
