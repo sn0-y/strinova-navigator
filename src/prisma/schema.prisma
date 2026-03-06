@@ -61,6 +61,7 @@ model Moderator {
   userId      String  @id
   currentTier Int     @default(3)
   isExempt    Boolean @default(false)
+  isActive    Boolean  @default(false)
 
   activities  ModActivity[]
   tierHistory TierHistory[]
