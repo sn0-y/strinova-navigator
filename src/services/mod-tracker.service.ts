@@ -42,8 +42,14 @@ export function parseActionType(title: string | null | undefined): ActionDetail 
     if (!title) return null;
     
     const match = title.match(/[a-zA-Z]+/);
+    if (!match) return null;
     
-    return match ? (match[0].toUpperCase() as ActionDetail) : null; 
+    const action = match[0].toUpperCase();
+    if (Object.values(ActionDetail).includes(action as ActionDetail)) {
+        return action as ActionDetail;
+    }
+    
+    return null;
 }
 
 /**
