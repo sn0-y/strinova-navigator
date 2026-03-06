@@ -2,6 +2,7 @@
 
 interface config {
 	prefix: string;
+	guildId: string;
 	roles: {
 		staff: string;
 		leadmod: string;
@@ -32,6 +33,7 @@ export const CATEGORY_CONFIG = {
 
 const production: config = {
 	prefix: '&',
+	guildId: '1182952140684136470',
 	roles: {
 		staff: '1182953334492106772',
 		leadmod: '1182953730572820562'
@@ -45,6 +47,7 @@ const production: config = {
 
 const development: config = {
 	prefix: '&',
+	guildId: '1460717170064359457',
 	roles: {
 		staff: '1460717636018110550',
 		leadmod: '1474998553515393189'

@@ -63,23 +63,30 @@ export async function resolveUsernameToId(guild: Guild, username: string): Promi
     }
 }
 
-export async function logCaseActivity(userId: string, caseType: CaseType, action: ActionDetail, source: string, messageId: string) {
+export async function logCaseActivity(userId: string, caseType: CaseType, action: ActionDetail | null, source: string, messageId: string, recordedAt: Date = new Date()) {
     await prisma.$transaction(async (prisma) => {
-        prisma.moderator.upsert({
+        await prisma.moderator.upsert({
             where: { userId },
             update: {},
-            create: { userId, currentTier: 3 }
+            create: { userId, currentTier: 3, isActive: true }
         });
 
-        await prisma.modActivity.create({
-            data: {
-                userId,
-                type: caseType,
-                value: 1, // change later
-                source,
-                referenceId: messageId,
-                actionDetail: action
-            }
-        })
+        const existingActivity = await prisma.modActivity.findFirst({
+            where: { referenceId: messageId }
+        });
+
+        if (!existingActivity) {
+            await prisma.modActivity.create({
+                data: {
+                    userId,
+                    type: caseType,
+                    value: 1, // change later
+                    source,
+                    referenceId: messageId,
+                    actionDetail: action,
+                    recordedAt
+                }
+            });
+        }
     });
 }

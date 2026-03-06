@@ -64,7 +64,7 @@ model Moderator {
   isActive    Boolean  @default(false)
 
   activities  ModActivity[]
-  tierHistory TierHistory[]
+  weeklyStats WeeklyModStat[]
 }
 
 model ModActivity {
@@ -82,15 +82,23 @@ model ModActivity {
   actionDetail ActionDetail?
 }
 
-model TierHistory {
-  id        Int       @id @default(autoincrement())
-  userId    String
-  moderator Moderator @relation(fields: [userId], references: [userId])
+model WeeklyModStat {
+  id             Int       @id @default(autoincrement())
+  userId         String
+  moderator      Moderator @relation(fields: [userId], references: [userId])
+  
+  weekStartDate  DateTime
+  
+  cases          Int       @default(0)
+  tickets        Int       @default(0)
+  publicMessages Int       @default(0)
+  voiceMinutes   Int       @default(0)
+  
+  finalScore     Float     @default(0)
+  oldTier        Int
+  newTier        Int
 
-  weekStartDate DateTime
-  oldTier       Int
-  newTier       Int
-  reason        String // "Automated Weekly Drop", "Manual Override", "Maintained"
+  @@unique([userId, weekStartDate]) 
 }
 
 enum ActivityType {
