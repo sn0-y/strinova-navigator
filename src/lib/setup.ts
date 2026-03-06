@@ -31,5 +31,7 @@ declare module '@skyra/env-utilities' {
 		// Storage connection strings
 		DATABASE_URL: string;
 		REDIS_URL: string;
+		// API tokens
+		STATBOT_API_TOKEN: string;
 	}
 }
