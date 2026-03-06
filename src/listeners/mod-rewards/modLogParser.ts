@@ -3,7 +3,7 @@ import { Events, Listener } from '@sapphire/framework';
 import { config } from 'config';
 import { Message } from 'discord.js';
 import { ActionDetail } from 'prisma/generated/prisma/enums';
-import { CaseType, logCaseActivity, parseActionType, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-rewards.service';
+import { CaseType, logCaseActivity, parseActionType, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
 @ApplyOptions<Listener.Options>({
 	event: Events.MessageCreate,
