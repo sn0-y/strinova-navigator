@@ -5,6 +5,8 @@ import { prisma } from 'prisma';
 import { CATEGORY_CONFIG } from 'config';
 import { config } from 'config';
 import { generateModeratorReport, processTierUpdates, aggregateMonthlyReport } from 'services/mod-reports.service';
+
+const BACKFILL_WEEKS = 4;
 import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
 const moderatorDataWipeConfirmations = new Map<string, { code: string; expiresAt: number }>();
@@ -371,11 +373,12 @@ export class UserCommand extends Subcommand {
 	}
 
 	public async backfill(interaction: Subcommand.ChatInputCommandInteraction) {
-		await interaction.reply({ content: '⏳ Scraping logs for the last 30 days...', ephemeral: true });
+		await interaction.reply({ content: '⏳ Scraping logs and generating weekly stats for the last month...', ephemeral: true });
 		const startDate = new Date();
 		startDate.setDate(startDate.getDate() - 30); // Go back 30 days
 
 		let totalParsed = 0;
+		let weeksGenerated = 0;
 
 		try {
 			const casesChannel = (await this.container.client.channels.fetch(config.channels.modCasesLog)) as TextChannel;
@@ -384,11 +387,45 @@ export class UserCommand extends Subcommand {
 			totalParsed += await this.processChannel(casesChannel, startDate, 'CASE_HANDLED', interaction.guild!);
 			totalParsed += await this.processChannel(modmailChannel, startDate, 'TICKET_HANDLED', interaction.guild!);
 
-			return interaction.editReply(`✅ Ingestion complete! Backfilled **${totalParsed}** actions into Prisma.`);
+			const weeklyWindows = this.getLastMonthWeeklyWindows();
+
+			for (const window of weeklyWindows) {
+				const rawReport = await generateModeratorReport(interaction.guildId!, window.startDate, window.endDate);
+				if (!rawReport || rawReport.length === 0) continue;
+
+				await processTierUpdates(rawReport, window.startDate);
+				weeksGenerated++;
+			}
+
+			return interaction.editReply(
+				`✅ Ingestion complete! Backfilled **${totalParsed}** actions into Prisma and generated **${weeksGenerated}** weekly stat snapshots for the last month.`
+			);
 		} catch (error) {
 			this.container.logger.error(error);
 			return interaction.editReply('❌ Error during backfill. Check console.');
 		}
+	}
+
+	private getLastMonthWeeklyWindows() {
+		const now = new Date();
+		const currentDay = now.getDay();
+		const daysToThisMonday = currentDay === 0 ? 6 : currentDay - 1;
+
+		const thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToThisMonday);
+		const windows: { startDate: Date; endDate: Date }[] = [];
+
+		for (let weekOffset = BACKFILL_WEEKS; weekOffset >= 1; weekOffset--) {
+			const startDate = new Date(thisWeekStart);
+			startDate.setDate(thisWeekStart.getDate() - weekOffset * 7);
+
+			const endDate = new Date(startDate);
+			endDate.setDate(startDate.getDate() + 6);
+			endDate.setHours(23, 59, 59, 999);
+
+			windows.push({ startDate, endDate });
+		}
+
+		return windows;
 	}
 
 	private async processChannel(channel: TextChannel, startDate: Date, activityType: 'CASE_HANDLED' | 'TICKET_HANDLED', guild: any) {
