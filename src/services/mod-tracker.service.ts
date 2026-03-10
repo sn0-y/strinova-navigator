@@ -1,6 +1,6 @@
-import { Guild } from "discord.js";
-import { prisma } from "prisma";
-import { ActionDetail } from "prisma/generated/prisma/enums";
+import { Guild } from 'discord.js';
+import { prisma } from 'prisma';
+import { ActionDetail } from 'prisma/generated/prisma/enums';
 
 export type CaseType = 'TICKET_HANDLED' | 'CASE_HANDLED';
 
@@ -9,9 +9,9 @@ export type CaseType = 'TICKET_HANDLED' | 'CASE_HANDLED';
  * @returns The Discord User ID, or null if not found.
  */
 export function parseModmailFooter(footerText: string): string | null {
-    // Looks for exactly 17 to 20 digits surrounded by parentheses
-    const match = footerText.match(/\((\d{17,20})\)/);
-    return match ? match[1] : null;
+	// Looks for exactly 17 to 20 digits surrounded by parentheses
+	const match = footerText.match(/\((\d{17,20})\)/);
+	return match ? match[1] : null;
 }
 
 /**
@@ -19,17 +19,17 @@ export function parseModmailFooter(footerText: string): string | null {
  * @returns The username (without the @), or null if it's a bot.
  */
 export function parseSapphireFooter(footerText: string): string | null {
-    // 1. Ignore bots (we don't give rewards to Dyno or Wick)
-    if (footerText.includes('#')) {
-        return null;
-    }
+	// 1. Ignore bots (we don't give rewards to Dyno or Wick)
+	if (footerText.includes('#')) {
+		return null;
+	}
 
-    // 2. Extract human username
-    if (footerText.startsWith('@')) {
-        return footerText.substring(1).toLowerCase(); // Return 'neko4an'
-    }
+	// 2. Extract human username
+	if (footerText.startsWith('@')) {
+		return footerText.substring(1).toLowerCase(); // Return 'neko4an'
+	}
 
-    return null;
+	return null;
 }
 
 /**
@@ -39,17 +39,17 @@ export function parseSapphireFooter(footerText: string): string | null {
  * @returns The action type string, or null.
  */
 export function parseActionType(title: string | null | undefined): ActionDetail | null {
-    if (!title) return null;
-    
-    const match = title.match(/[a-zA-Z]+/);
-    if (!match) return null;
-    
-    const action = match[0].toUpperCase();
-    if (Object.values(ActionDetail).includes(action as ActionDetail)) {
-        return action as ActionDetail;
-    }
-    
-    return null;
+	if (!title) return null;
+
+	const match = title.match(/[a-zA-Z]+/);
+	if (!match) return null;
+
+	const action = match[0].toUpperCase();
+	if (Object.values(ActionDetail).includes(action as ActionDetail)) {
+		return action as ActionDetail;
+	}
+
+	return null;
 }
 
 /**
@@ -57,42 +57,52 @@ export function parseActionType(title: string | null | undefined): ActionDetail 
  * @returns The Discord User ID, or null if the user cannot be found.
  */
 export async function resolveUsernameToId(guild: Guild, username: string): Promise<string | null> {
-    const cachedMember = guild.members.cache.find(m => m.user.username.toLowerCase() === username);
-    if (cachedMember) return cachedMember.id;
+	const cachedMember = guild.members.cache.find((m) => m.user.username.toLowerCase() === username);
+	if (cachedMember) return cachedMember.id;
 
-    try {
-        const members = await guild.members.fetch({ query: username, limit: 1 });
-        const member = members.first();
-        return member ? member.id : null;
-    } catch (error) {
-        return null;
-    }
+	try {
+		const members = await guild.members.fetch({ query: username, limit: 1 });
+		const member = members.first();
+		return member ? member.id : null;
+	} catch (error) {
+		return null;
+	}
 }
 
-export async function logCaseActivity(userId: string, caseType: CaseType, action: ActionDetail | null, source: string, messageId: string, recordedAt: Date = new Date()) {
-    await prisma.$transaction(async (prisma) => {
-        await prisma.moderator.upsert({
-            where: { userId },
-            update: {},
-            create: { userId, currentTier: 3, isActive: true }
-        });
+export async function logCaseActivity(
+	userId: string,
+	caseType: CaseType,
+	action: ActionDetail | null,
+	source: string,
+	messageId: string,
+	recordedAt: Date = new Date()
+) {
+	await prisma.$transaction(async (prisma) => {
+		const moderator = await prisma.moderator.findFirst({
+			where: {
+				userId,
+				isActive: true
+			}
+		});
 
-        const existingActivity = await prisma.modActivity.findFirst({
-            where: { referenceId: messageId }
-        });
+		if (!moderator) return;
 
-        if (!existingActivity) {
-            await prisma.modActivity.create({
-                data: {
-                    userId,
-                    type: caseType,
-                    value: 1, // change later
-                    source,
-                    referenceId: messageId,
-                    actionDetail: action,
-                    recordedAt
-                }
-            });
-        }
-    });
+		const existingActivity = await prisma.modActivity.findFirst({
+			where: { referenceId: messageId }
+		});
+
+		if (!existingActivity) {
+			await prisma.modActivity.create({
+				data: {
+					userId,
+					type: caseType,
+					value: 1, // change later
+					source,
+					referenceId: messageId,
+					actionDetail: action,
+					recordedAt
+				}
+			});
+		}
+	});
 }

@@ -14,7 +14,10 @@ import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFoot
 		{ name: 'generate-weekly', chatInputRun: 'generateWeekly' },
 		{ name: 'view-monthly', chatInputRun: 'viewMonthly' },
 		{ name: 'view-individual', chatInputRun: 'viewIndividual' },
-		{ name: 'backfill', chatInputRun: 'backfill' }
+		{ name: 'backfill', chatInputRun: 'backfill' },
+		{ name: 'add-moderator', chatInputRun: 'addModerator' },
+		{ name: 'remove-moderator', chatInputRun: 'removeModerator' },
+		{ name: 'list-moderators', chatInputRun: 'listModerators' }
 	]
 })
 export class UserCommand extends Subcommand {
@@ -24,24 +27,30 @@ export class UserCommand extends Subcommand {
 				.setName(this.name)
 				.setDescription(this.description)
 				.addSubcommand((command) =>
+					command.setName('generate-weekly').setDescription('Generate and store the latest weekly moderator activity report')
+				)
+				.addSubcommand((command) =>
+					command.setName('view-monthly').setDescription('View the aggregated moderator statistics for the last month')
+				)
+				.addSubcommand((command) => command.setName('view-individual').setDescription("View a specific moderator's report"))
+				.addSubcommand((command) => command.setName('backfill').setDescription('Backfill past data'))
+				.addSubcommand((command) =>
 					command
-						.setName('generate-weekly')
-						.setDescription('Generate and store the latest weekly moderator activity report')
+						.setName('add-moderator')
+						.setDescription('Add a moderator to the manually managed rewards roster')
+						.addUserOption((option) => option.setName('user').setDescription('The moderator to add').setRequired(true))
+						.addIntegerOption((option) =>
+							option.setName('tier').setDescription('Starting tier for the moderator').setMinValue(0).setMaxValue(3).setRequired(false)
+						)
 				)
 				.addSubcommand((command) =>
 					command
-						.setName('view-monthly')
-						.setDescription('View the aggregated moderator statistics for the last month')
+						.setName('remove-moderator')
+						.setDescription('Remove a moderator from the manually managed rewards roster')
+						.addUserOption((option) => option.setName('user').setDescription('The moderator to remove').setRequired(true))
 				)
 				.addSubcommand((command) =>
-					command
-						.setName('view-individual')
-						.setDescription('View a specific moderator\'s report')
-				)
-				.addSubcommand((command) =>
-					command
-						.setName('backfill')
-						.setDescription('Backfill past data')
+					command.setName('list-moderators').setDescription('List all moderators currently in the manually managed rewards roster')
 				)
 		);
 	}
@@ -53,7 +62,7 @@ export class UserCommand extends Subcommand {
 		// Compute start and end of the last complete week (e.g., Monday to Sunday)
 		const currentDay = now.getDay();
 		const daysToLastMonday = currentDay === 0 ? 6 : currentDay - 1; // Days since this week's Monday
-		
+
 		const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToLastMonday - 7);
 		const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysToLastMonday - 1, 23, 59, 59, 999);
 
@@ -65,8 +74,10 @@ export class UserCommand extends Subcommand {
 			}
 
 			const { promotions, demotions, maintained } = await processTierUpdates(rawReport, startDate);
-			
-			return interaction.editReply(`Weekly report generated. Mod tiers updated: ${promotions.length} promoted, ${demotions.length} demoted, ${maintained.length} maintained.`);
+
+			return interaction.editReply(
+				`Weekly report generated. Mod tiers updated: ${promotions.length} promoted, ${demotions.length} demoted, ${maintained.length} maintained.`
+			);
 		} catch (error) {
 			console.error(error);
 			return interaction.editReply('An error occurred while generating the weekly report.');
@@ -82,7 +93,7 @@ export class UserCommand extends Subcommand {
 
 		try {
 			const aggregated = await aggregateMonthlyReport(startOfMonth, endOfMonth);
-			
+
 			if (!aggregated || aggregated.length === 0) {
 				return interaction.editReply('No aggregated data found for the last month.');
 			}
@@ -90,13 +101,13 @@ export class UserCommand extends Subcommand {
 			// Group by Tier
 			const moderators = await prisma.moderator.findMany();
 			const tierMap = new Map<number, any[]>();
-			[1, 2, 3].forEach(tier => tierMap.set(tier, []));
+			[1, 2, 3].forEach((tier) => tierMap.set(tier, []));
 
 			for (const stats of aggregated) {
-				const mod = moderators.find(m => m.userId === stats.userId);
+				const mod = moderators.find((m) => m.userId === stats.userId);
 				const tier = mod ? mod.currentTier : 1; // Default to Tier 1
 
-				const points = 
+				const points =
 					(stats._sum.cases || 0) * CATEGORY_CONFIG.casesHandled.pointsPerUnit +
 					(stats._sum.tickets || 0) * CATEGORY_CONFIG.modActionsTaken.pointsPerUnit +
 					(stats._sum.publicMessages || 0) * CATEGORY_CONFIG.publicChatMessages.pointsPerUnit +
@@ -121,22 +132,22 @@ export class UserCommand extends Subcommand {
 				1: ':downvote~2:'
 			};
 
-			[3, 2, 1].forEach(tier => {
+			[3, 2, 1].forEach((tier) => {
 				content += `## ${tierEmojis[tier] || ''} Tier ${tier}\n`;
 				const tierMods = tierMap.get(tier) || [];
-				
+
 				if (tierMods.length === 0) {
 					content += '*None!*\n';
 				} else {
 					// Sort by points descending
 					tierMods.sort((a, b) => b.points - a.points);
-					tierMods.forEach(m => {
+					tierMods.forEach((m) => {
 						content += `<@${m.userId}> | Points: **${m.points}** | ${m.cases} Cases | ${m.tickets} Tickets | ${m.publicMessages} Msgs | ${m.voiceMinutes} Voice Mins\n`;
 					});
 				}
 				content += '\n';
 			});
-			
+
 			// Handle limits of Discord messages
 			if (content.length > 2000) {
 				return interaction.editReply({ files: [{ attachment: Buffer.from(content), name: 'monthly-report.txt' }] });
@@ -151,6 +162,90 @@ export class UserCommand extends Subcommand {
 
 	public async viewIndividual(interaction: Subcommand.ChatInputCommandInteraction) {
 		return interaction.reply({ content: 'Individual report generation is not implemented yet.', ephemeral: true });
+	}
+
+	public async addModerator(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const user = interaction.options.getUser('user', true);
+		const tier = interaction.options.getInteger('tier', false) ?? 3;
+
+		try {
+			const moderator = await prisma.moderator.upsert({
+				where: { userId: user.id },
+				update: {
+					isActive: true,
+					currentTier: tier
+				},
+				create: {
+					userId: user.id,
+					currentTier: tier,
+					isActive: true
+				}
+			});
+
+			return interaction.editReply(`✅ Added <@${moderator.userId}> to the moderator roster with Tier **${moderator.currentTier}**.`);
+		} catch (error) {
+			console.error(error);
+			return interaction.editReply('An error occurred while adding that moderator to the roster.');
+		}
+	}
+
+	public async removeModerator(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const user = interaction.options.getUser('user', true);
+
+		try {
+			const existingModerator = await prisma.moderator.findUnique({
+				where: { userId: user.id }
+			});
+
+			if (!existingModerator || !existingModerator.isActive) {
+				return interaction.editReply('That user is not currently in the active moderator roster.');
+			}
+
+			await prisma.moderator.update({
+				where: { userId: user.id },
+				data: { isActive: false }
+			});
+
+			return interaction.editReply(`✅ Removed <@${user.id}> from the active moderator roster.`);
+		} catch (error) {
+			console.error(error);
+			return interaction.editReply('An error occurred while removing that moderator from the roster.');
+		}
+	}
+
+	public async listModerators(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		try {
+			const moderators = await prisma.moderator.findMany({
+				where: { isActive: true },
+				orderBy: [{ currentTier: 'desc' }, { userId: 'asc' }]
+			});
+
+			if (moderators.length === 0) {
+				return interaction.editReply('There are no active moderators in the manually managed roster.');
+			}
+
+			const content = [
+				'**Active Moderator Roster**',
+				...moderators.map((moderator) => `<@${moderator.userId}> — Tier **${moderator.currentTier}**${moderator.isExempt ? ' — Exempt' : ''}`)
+			].join('\n');
+
+			if (content.length > 2000) {
+				return interaction.editReply({
+					files: [{ attachment: Buffer.from(content), name: 'moderator-roster.txt' }]
+				});
+			}
+
+			return interaction.editReply(content);
+		} catch (error) {
+			console.error(error);
+			return interaction.editReply('An error occurred while fetching the moderator roster.');
+		}
 	}
 
 	public async backfill(interaction: Subcommand.ChatInputCommandInteraction) {
