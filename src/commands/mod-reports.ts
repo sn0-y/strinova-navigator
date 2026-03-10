@@ -7,17 +7,39 @@ import { config } from 'config';
 import { generateModeratorReport, processTierUpdates, aggregateMonthlyReport } from 'services/mod-reports.service';
 import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
+const moderatorDataWipeConfirmations = new Map<string, { code: string; expiresAt: number }>();
+
 @ApplyOptions<Subcommand.Options>({
 	description: 'Commands related to moderation reports',
 	preconditions: [['LeadModOnly', 'StaffOnly']],
 	subcommands: [
-		{ name: 'generate-weekly', chatInputRun: 'generateWeekly' },
-		{ name: 'view-monthly', chatInputRun: 'viewMonthly' },
-		{ name: 'view-individual', chatInputRun: 'viewIndividual' },
-		{ name: 'backfill', chatInputRun: 'backfill' },
-		{ name: 'add-moderator', chatInputRun: 'addModerator' },
-		{ name: 'remove-moderator', chatInputRun: 'removeModerator' },
-		{ name: 'list-moderators', chatInputRun: 'listModerators' }
+		{
+			name: 'reports',
+			type: 'group',
+			entries: [
+				{ name: 'generate-weekly', chatInputRun: 'generateWeekly' },
+				{ name: 'view-monthly', chatInputRun: 'viewMonthly' },
+				{ name: 'view-individual', chatInputRun: 'viewIndividual' }
+			]
+		},
+		{
+			name: 'roster',
+			type: 'group',
+			entries: [
+				{ name: 'add', chatInputRun: 'addModerator' },
+				{ name: 'remove', chatInputRun: 'removeModerator' },
+				{ name: 'list', chatInputRun: 'listModerators' }
+			]
+		},
+		{
+			name: 'data',
+			type: 'group',
+			entries: [
+				{ name: 'backfill', chatInputRun: 'backfill' },
+				{ name: 'wipe', chatInputRun: 'wipeModeratorData' },
+				{ name: 'confirm-wipe', chatInputRun: 'confirmWipeModeratorData' }
+			]
+		}
 	]
 })
 export class UserCommand extends Subcommand {
@@ -26,31 +48,63 @@ export class UserCommand extends Subcommand {
 			builder //
 				.setName(this.name)
 				.setDescription(this.description)
-				.addSubcommand((command) =>
-					command.setName('generate-weekly').setDescription('Generate and store the latest weekly moderator activity report')
+				.addSubcommandGroup((group) =>
+					group
+						.setName('reports')
+						.setDescription('Reporting and report generation commands')
+						.addSubcommand((command) =>
+							command.setName('generate-weekly').setDescription('Generate and store the latest weekly moderator activity report')
+						)
+						.addSubcommand((command) =>
+							command.setName('view-monthly').setDescription('View the aggregated moderator statistics for the last month')
+						)
+						.addSubcommand((command) => command.setName('view-individual').setDescription("View a specific moderator's report"))
 				)
-				.addSubcommand((command) =>
-					command.setName('view-monthly').setDescription('View the aggregated moderator statistics for the last month')
-				)
-				.addSubcommand((command) => command.setName('view-individual').setDescription("View a specific moderator's report"))
-				.addSubcommand((command) => command.setName('backfill').setDescription('Backfill past data'))
-				.addSubcommand((command) =>
-					command
-						.setName('add-moderator')
-						.setDescription('Add a moderator to the manually managed rewards roster')
-						.addUserOption((option) => option.setName('user').setDescription('The moderator to add').setRequired(true))
-						.addIntegerOption((option) =>
-							option.setName('tier').setDescription('Starting tier for the moderator').setMinValue(0).setMaxValue(3).setRequired(false)
+				.addSubcommandGroup((group) =>
+					group
+						.setName('roster')
+						.setDescription('Manually manage the moderator rewards roster')
+						.addSubcommand((command) =>
+							command
+								.setName('add')
+								.setDescription('Add a moderator to the manually managed rewards roster')
+								.addUserOption((option) => option.setName('user').setDescription('The moderator to add').setRequired(true))
+								.addIntegerOption((option) =>
+									option
+										.setName('tier')
+										.setDescription('Starting tier for the moderator')
+										.setMinValue(0)
+										.setMaxValue(3)
+										.setRequired(false)
+								)
+						)
+						.addSubcommand((command) =>
+							command
+								.setName('remove')
+								.setDescription('Remove a moderator from the manually managed rewards roster')
+								.addUserOption((option) => option.setName('user').setDescription('The moderator to remove').setRequired(true))
+						)
+						.addSubcommand((command) =>
+							command.setName('list').setDescription('List all moderators currently in the manually managed rewards roster')
 						)
 				)
-				.addSubcommand((command) =>
-					command
-						.setName('remove-moderator')
-						.setDescription('Remove a moderator from the manually managed rewards roster')
-						.addUserOption((option) => option.setName('user').setDescription('The moderator to remove').setRequired(true))
-				)
-				.addSubcommand((command) =>
-					command.setName('list-moderators').setDescription('List all moderators currently in the manually managed rewards roster')
+				.addSubcommandGroup((group) =>
+					group
+						.setName('data')
+						.setDescription('Backfill and destructive moderator data operations')
+						.addSubcommand((command) => command.setName('backfill').setDescription('Backfill past data'))
+						.addSubcommand((command) => command.setName('wipe').setDescription('Start a two-step wipe of all moderator reward data'))
+						.addSubcommand((command) =>
+							command
+								.setName('confirm-wipe')
+								.setDescription('Confirm the wipe of all moderator reward data with a confirmation code')
+								.addStringOption((option) =>
+									option
+										.setName('code')
+										.setDescription('The confirmation code returned by the first wipe command')
+										.setRequired(true)
+								)
+						)
 				)
 		);
 	}
@@ -245,6 +299,74 @@ export class UserCommand extends Subcommand {
 		} catch (error) {
 			console.error(error);
 			return interaction.editReply('An error occurred while fetching the moderator roster.');
+		}
+	}
+
+	public async wipeModeratorData(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const confirmationCode = `WIPE-${Date.now().toString(36).toUpperCase()}`;
+		const expiresAt = Date.now() + 5 * 60 * 1000;
+
+		moderatorDataWipeConfirmations.set(interaction.user.id, {
+			code: confirmationCode,
+			expiresAt
+		});
+
+		return interaction.editReply(
+			[
+				'⚠️ **Danger Zone**',
+				'This will permanently delete **all moderator reward data**:',
+				'- all moderator roster entries',
+				'- all logged moderator activities',
+				'- all weekly moderator stats',
+				'',
+				`This confirmation code expires <t:${Math.floor(expiresAt / 1000)}:R>.`,
+				'To confirm, run:',
+				`/mod-reports data confirm-wipe code:${confirmationCode}`,
+				'',
+				'Only use this if you are absolutely sure.'
+			].join('\n')
+		);
+	}
+
+	public async confirmWipeModeratorData(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const providedCode = interaction.options.getString('code', true).trim();
+		const pendingConfirmation = moderatorDataWipeConfirmations.get(interaction.user.id);
+
+		if (!pendingConfirmation) {
+			return interaction.editReply('❌ No pending moderator data wipe confirmation was found. Run `/mod-reports data wipe` first.');
+		}
+
+		if (pendingConfirmation.expiresAt < Date.now()) {
+			moderatorDataWipeConfirmations.delete(interaction.user.id);
+			return interaction.editReply('❌ Your moderator data wipe confirmation has expired. Run `/mod-reports data wipe` again.');
+		}
+
+		if (pendingConfirmation.code !== providedCode) {
+			return interaction.editReply('❌ Invalid confirmation code. The moderator reward data wipe was cancelled.');
+		}
+
+		try {
+			await prisma.$transaction([prisma.weeklyModStat.deleteMany(), prisma.modActivity.deleteMany(), prisma.moderator.deleteMany()]);
+			moderatorDataWipeConfirmations.delete(interaction.user.id);
+
+			return interaction.editReply(
+				[
+					'✅ Moderator reward data wipe completed.',
+					'Deleted all records from:',
+					'- `Moderator`',
+					'- `ModActivity`',
+					'- `WeeklyModStat`',
+					'',
+					`Confirmation code used: \`${providedCode}\``
+				].join('\n')
+			);
+		} catch (error) {
+			this.container.logger.error({ error, userId: interaction.user.id }, '[ModRewards] Failed to wipe moderator reward data.');
+			return interaction.editReply('❌ Failed to wipe moderator reward data. Check logs for details.');
 		}
 	}
 
