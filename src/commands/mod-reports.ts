@@ -5,9 +5,9 @@ import { prisma } from 'prisma';
 import { CATEGORY_CONFIG } from 'config';
 import { config } from 'config';
 import { generateModeratorReport, processTierUpdates, aggregateMonthlyReport } from 'services/mod-reports.service';
+import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
 const BACKFILL_WEEKS = 4;
-import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
 const moderatorDataWipeConfirmations = new Map<string, { code: string; expiresAt: number }>();
 
@@ -30,7 +30,8 @@ const moderatorDataWipeConfirmations = new Map<string, { code: string; expiresAt
 			entries: [
 				{ name: 'add', chatInputRun: 'addModerator' },
 				{ name: 'remove', chatInputRun: 'removeModerator' },
-				{ name: 'list', chatInputRun: 'listModerators' }
+				{ name: 'list', chatInputRun: 'listModerators' },
+				{ name: 'set-tier', chatInputRun: 'setTier' }
 			]
 		},
 		{
@@ -89,6 +90,15 @@ export class UserCommand extends Subcommand {
 						.addSubcommand((command) =>
 							command.setName('list').setDescription('List all moderators currently in the manually managed rewards roster')
 						)
+						.addSubcommand((command) =>
+							command
+								.setName('set-tier')
+								.setDescription('Manually set a moderator tier')
+								.addUserOption((option) => option.setName('user').setDescription('The moderator to update').setRequired(true))
+								.addIntegerOption((option) =>
+									option.setName('tier').setDescription('The tier to assign').setMinValue(0).setMaxValue(3).setRequired(true)
+								)
+						)
 				)
 				.addSubcommandGroup((group) =>
 					group
@@ -132,7 +142,7 @@ export class UserCommand extends Subcommand {
 			const { promotions, demotions, maintained } = await processTierUpdates(rawReport, startDate);
 
 			return interaction.editReply(
-				`Weekly report generated. Mod tiers updated: ${promotions.length} promoted, ${demotions.length} demoted, ${maintained.length} maintained.`
+				`Weekly report generated. Tier recommendations stored: ${promotions.length} promotion recommendations, ${demotions.length} demotion recommendations, ${maintained.length} unchanged recommendations.`
 			);
 		} catch (error) {
 			console.error(error);
@@ -304,6 +314,33 @@ export class UserCommand extends Subcommand {
 		}
 	}
 
+	public async setTier(interaction: Subcommand.ChatInputCommandInteraction) {
+		await interaction.deferReply({ flags: ['Ephemeral'] });
+
+		const user = interaction.options.getUser('user', true);
+		const tier = interaction.options.getInteger('tier', true);
+
+		try {
+			const existingModerator = await prisma.moderator.findUnique({
+				where: { userId: user.id }
+			});
+
+			if (!existingModerator || !existingModerator.isActive) {
+				return interaction.editReply('That user is not currently in the active moderator roster.');
+			}
+
+			await prisma.moderator.update({
+				where: { userId: user.id },
+				data: { currentTier: tier }
+			});
+
+			return interaction.editReply(`✅ Set <@${user.id}> to Tier **${tier}**.`);
+		} catch (error) {
+			console.error(error);
+			return interaction.editReply('An error occurred while setting that moderator tier.');
+		}
+	}
+
 	public async wipeModeratorData(interaction: Subcommand.ChatInputCommandInteraction) {
 		await interaction.deferReply({ flags: ['Ephemeral'] });
 
@@ -398,7 +435,7 @@ export class UserCommand extends Subcommand {
 			}
 
 			return interaction.editReply(
-				`✅ Ingestion complete! Backfilled **${totalParsed}** actions into Prisma and generated **${weeksGenerated}** weekly stat snapshots for the last month.`
+				`✅ Ingestion complete! Backfilled **${totalParsed}** actions into Prisma and generated **${weeksGenerated}** weekly stat snapshots with stored tier recommendations for the last month.`
 			);
 		} catch (error) {
 			this.container.logger.error(error);

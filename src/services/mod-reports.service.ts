@@ -241,8 +241,8 @@ export async function processTierUpdates(reportResults: any[], weekStartDate: Da
 		if (!mod || mod.isExempt) continue;
 
 		const oldTier = mod.currentTier;
-		const newTier = Math.max(0, Math.min(3, oldTier + result.tierChange));
-		const actualChange = newTier - oldTier;
+		const recommendedTier = Math.max(0, Math.min(3, oldTier + result.tierChange));
+		const actualChange = recommendedTier - oldTier;
 
 		prismaOperations.push(
 			prisma.weeklyModStat.upsert({
@@ -259,7 +259,7 @@ export async function processTierUpdates(reportResults: any[], weekStartDate: Da
 					voiceMinutes: result.stats.voiceMinutes,
 					finalScore: parseFloat(result.finalScore),
 					oldTier,
-					newTier
+					newTier: recommendedTier
 				},
 				create: {
 					userId: mod.userId,
@@ -270,17 +270,13 @@ export async function processTierUpdates(reportResults: any[], weekStartDate: Da
 					voiceMinutes: result.stats.voiceMinutes,
 					finalScore: parseFloat(result.finalScore),
 					oldTier,
-					newTier
+					newTier: recommendedTier
 				}
 			})
 		);
 
-		if (actualChange !== 0) {
-			prismaOperations.push(prisma.moderator.update({ where: { userId: mod.userId }, data: { currentTier: newTier } }));
-		}
-
 		// Push the raw data into our outcome object
-		const record = { userId: mod.userId, oldTier, newTier, score: result.finalScore, stats: result.stats };
+		const record = { userId: mod.userId, oldTier, newTier: recommendedTier, score: result.finalScore, stats: result.stats };
 
 		if (actualChange > 0) outcomes.promotions.push(record);
 		else if (actualChange < 0) outcomes.demotions.push(record);
