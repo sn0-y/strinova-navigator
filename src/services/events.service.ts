@@ -1,5 +1,5 @@
 import { container } from '@sapphire/framework';
-import { config } from 'config';
+import { getConfig } from 'config';
 import { randomInt } from 'crypto';
 import { TextBasedChannel } from 'discord.js';
 import { prisma } from 'prisma';
@@ -274,15 +274,24 @@ export async function reportSent(eventId: number) {
 	return event?.reportSent || false;
 }
 
-export async function backfillEvent(eventId: number, channel: TextBasedChannel, requiredAttachments: boolean, minCharacters: number) {
+export async function backfillEvent(eventId: number, channel: TextBasedChannel, requiredAttachments: boolean, minCharacters: number, guildId: string) {
 	let lastMessageId: string | undefined;
 	const submissions: { userId: string; messageUrl: string }[] = [];
+	const config = await getConfig(guildId);
+	
+	const event = await prisma.event.findUnique({ where: { id: eventId }});
+	if (!event) return 0;
 
 	while (true) {
 		const messages = await channel.messages.fetch({ limit: 100, before: lastMessageId });
 		if (messages.size === 0) break;
 
 		for (const message of messages.values()) {
+			if (message.createdAt < event.createdAt) {
+				lastMessageId = undefined; // Signal to break outer loop
+				break;
+			}
+			
 			if (message.member?.roles.cache.hasAny(config.roles.staff, config.roles.leadmod)) continue;
 
 			if (message.author.bot) continue;
@@ -293,6 +302,10 @@ export async function backfillEvent(eventId: number, channel: TextBasedChannel, 
 				userId: message.author.id,
 				messageUrl: `https://discord.com/channels/${message.guildId}/${message.channelId}/${message.id}`
 			});
+		}
+
+		if (!lastMessageId && messages.size > 0 && messages.first()!.createdAt < event.createdAt) {
+			break;
 		}
 
 		lastMessageId = messages.last()?.id;

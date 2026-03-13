@@ -61,7 +61,7 @@ model Moderator {
   userId      String  @id
   currentTier Int     @default(3)
   isExempt    Boolean @default(false)
-  isActive    Boolean  @default(false)
+  isActive    Boolean @default(false)
 
   activities  ModActivity[]
   weeklyStats WeeklyModStat[]
@@ -83,22 +83,22 @@ model ModActivity {
 }
 
 model WeeklyModStat {
-  id             Int       @id @default(autoincrement())
-  userId         String
-  moderator      Moderator @relation(fields: [userId], references: [userId])
-  
-  weekStartDate  DateTime
-  
-  cases          Int       @default(0)
-  tickets        Int       @default(0)
-  publicMessages Int       @default(0)
-  voiceMinutes   Int       @default(0)
-  
-  finalScore     Float     @default(0)
-  oldTier        Int
-  newTier        Int
+  id        Int       @id @default(autoincrement())
+  userId    String
+  moderator Moderator @relation(fields: [userId], references: [userId])
 
-  @@unique([userId, weekStartDate]) 
+  weekStartDate DateTime
+
+  cases          Int @default(0)
+  tickets        Int @default(0)
+  publicMessages Int @default(0)
+  voiceMinutes   Int @default(0)
+
+  finalScore Float @default(0)
+  oldTier    Int
+  newTier    Int
+
+  @@unique([userId, weekStartDate])
 }
 
 enum ActivityType {
@@ -116,4 +116,20 @@ enum ActionDetail {
   BAN
   CLOSE_TICKET
   CASE
+}
+
+// Server Configuration System
+
+model ServerConfig {
+  guildId String @id
+  prefix  String @default("&")
+
+  staffRoleId   String?
+  leadModRoleId String?
+
+  eventNotificationsChannelId String?
+  modCasesLogChannelId        String?
+  modmailLogChannelId         String?
+
+  updatedAt DateTime @updatedAt
 }

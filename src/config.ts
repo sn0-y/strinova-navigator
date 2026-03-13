@@ -61,4 +61,27 @@ const development: config = {
 
 export const isProduction = process.env.NODE_ENV === 'production';
 
-export const config: config = isProduction ? production : development;
+export const fallbackConfig: config = isProduction ? production : development;
+
+import { getServerConfig } from 'services/config.service';
+
+export async function getConfig(guildId: string): Promise<config> {
+	const dbConfig = await getServerConfig(guildId);
+	
+	if (!dbConfig) return fallbackConfig;
+
+	return {
+		prefix: dbConfig.prefix,
+		guildId: dbConfig.guildId,
+		roles: {
+			staff: dbConfig.staffRoleId || fallbackConfig.roles.staff,
+			leadmod: dbConfig.leadModRoleId || fallbackConfig.roles.leadmod
+		},
+		channels: {
+			eventNotifications: dbConfig.eventNotificationsChannelId || fallbackConfig.channels.eventNotifications,
+			modCasesLog: dbConfig.modCasesLogChannelId || fallbackConfig.channels.modCasesLog,
+			modmailLog: dbConfig.modmailLogChannelId || fallbackConfig.channels.modmailLog
+		}
+	};
+}
+

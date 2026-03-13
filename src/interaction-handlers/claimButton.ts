@@ -1,6 +1,7 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { InteractionHandler, InteractionHandlerTypes } from '@sapphire/framework';
 import { LabelBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, type ButtonInteraction } from 'discord.js';
+import { prisma } from 'prisma';
 import { findWinner, reportSent } from 'services/events.service';
 
 @ApplyOptions<InteractionHandler.Options>({
@@ -30,6 +31,16 @@ export class ButtonHandler extends InteractionHandler {
 			.setPlaceholder('Your Strinova UID')
 			.setMinLength(5)
 			.setMaxLength(15);
+
+		// Check if user has claimed a UID before to implement "Remember me"
+		const pastWinner = await prisma.winner.findFirst({
+			where: { userId: interaction.user.id, inGameUid: { not: null } },
+			orderBy: { claimedAt: 'desc' }
+		});
+
+		if (pastWinner?.inGameUid) {
+			uidInput.setValue(pastWinner.inGameUid);
+		}
 
 		const label = new LabelBuilder().setLabel('Strinova ID:').setTextInputComponent(uidInput);
 

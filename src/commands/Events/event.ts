@@ -1,7 +1,7 @@
 import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
-import { Channel, ChannelType } from 'discord.js';
+import { Channel, ChannelType, TextChannel } from 'discord.js';
 import {
 	backfillEvent,
 	checkDuplicateEvent,
@@ -109,11 +109,7 @@ export class UserCommand extends Subcommand {
 		if (dupeCheck) return interaction.editReply({ content: `This event is already being tracked by [${dupeCheck.id} : ${dupeCheck.name}]` });
 
 		const event = await createEvent(channel.id, eventName, requireAttachment, minCharacters);
-		await interaction.editReply({ content: `Started tracking event [${event.id} : ${event.name}] in ${channel.url}` });
-
-		const sync = await backfillEvent(event.id, channel, requireAttachment, minCharacters);
-
-		return interaction.followUp({ content: `Backfilled ${sync} submissions for event [${event.id} : ${event.name}] in ${channel.url}` });
+		return interaction.editReply({ content: `Started tracking event [${event.id} : ${event.name}] in ${channel.url}` });
 	}
 
 	public async end(interaction: Subcommand.ChatInputCommandInteraction) {
@@ -128,6 +124,9 @@ export class UserCommand extends Subcommand {
 
 		if (!resultsChannel.isSendable())
 			return interaction.editReply({ content: 'I do not have permission to send messages in the results channel.' });
+
+		await interaction.editReply({ content: 'Syncing submissions via backfill...' });
+		await backfillEvent(event.id, channel as TextChannel, event.requireAttachment, event.minCharacters, interaction.guildId!);
 
 		const endResult = await endEventAndPickWinners(event.id, event.channelId, winnerCount);
 		if (!endResult.success) {

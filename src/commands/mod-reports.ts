@@ -3,8 +3,7 @@ import { Subcommand } from '@sapphire/plugin-subcommands';
 import { EmbedBuilder, TextChannel } from 'discord.js';
 import { PaginatedMessage } from '@sapphire/discord.js-utilities';
 import { prisma } from 'prisma';
-import { CATEGORY_CONFIG } from 'config';
-import { config } from 'config';
+import { CATEGORY_CONFIG, getConfig } from 'config';
 import { generateModeratorReport, processTierUpdates, aggregateMonthlyReport } from 'services/mod-reports.service';
 import { parseActionType, logCaseActivity, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
 
@@ -427,6 +426,7 @@ export class UserCommand extends Subcommand {
 		let weeksGenerated = 0;
 
 		try {
+			const config = await getConfig(interaction.guildId!);
 			const casesChannel = (await this.container.client.channels.fetch(config.channels.modCasesLog)) as TextChannel;
 			const modmailChannel = (await this.container.client.channels.fetch(config.channels.modmailLog)) as TextChannel;
 
