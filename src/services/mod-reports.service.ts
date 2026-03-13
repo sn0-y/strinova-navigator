@@ -1,6 +1,7 @@
 // src/services/mod-reports.service.ts
 import { prisma } from 'prisma';
-import { CATEGORY_CONFIG, WEIGHT_BUDGETS } from '../config';
+import { CATEGORY_CONFIG, WEIGHT_BUDGETS, isProduction } from '../config';
+import { container } from '@sapphire/framework';
 
 interface ModeratorStats {
 	cases: number;
@@ -29,7 +30,21 @@ export interface StatbotPresenceData {
 
 export async function fetchStatbotData(guildId: string, startDate: Date, endDate: Date): Promise<StatbotPresenceData[]> {
 	const apiToken = process.env.STATBOT_API_TOKEN;
-	if (!apiToken) throw new Error('STATBOT_API_TOKEN is not set');
+	if (!apiToken) {
+		if (!isProduction) {
+			container.logger.warn('[Statbot] STATBOT_API_TOKEN is not set. Mocking statbot data for development.');
+			const moderators = await prisma.moderator.findMany({
+				select: { userId: true },
+				where: { isActive: true }
+			});
+			return moderators.map(({ userId }) => ({
+				discordId: userId,
+				messagesCount: Math.floor(Math.random() * 500),
+				voiceMinutes: Math.floor(Math.random() * 300)
+			}));
+		}
+		throw new Error('STATBOT_API_TOKEN is not set');
+	}
 
 	const start = startDate.getTime();
 	const end = endDate.getTime();

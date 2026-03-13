@@ -3,16 +3,23 @@ import { Events, Listener } from '@sapphire/framework';
 import { config } from 'config';
 import { Message } from 'discord.js';
 import { ActionDetail } from 'prisma/generated/prisma/enums';
-import { CaseType, logCaseActivity, parseActionType, parseModmailFooter, parseSapphireFooter, resolveUsernameToId } from 'services/mod-tracker.service';
+import {
+	CaseType,
+	logCaseActivity,
+	parseActionType,
+	parseModmailFooter,
+	parseSapphireFooter,
+	resolveUsernameToId
+} from 'services/mod-tracker.service';
 
 @ApplyOptions<Listener.Options>({
 	event: Events.MessageCreate,
-	name: 'mod-rewards log-parser',
+	name: 'mod-rewards log-parser'
 })
 export class UserEvent extends Listener {
 	public override async run(message: Message) {
 		const { channelId } = message;
-		
+
 		const isModmailCase = channelId === config.channels.modmailLog;
 		const isModCases = channelId === config.channels.modCasesLog;
 
@@ -21,7 +28,7 @@ export class UserEvent extends Listener {
 		if (message.embeds.length === 0) return;
 
 		const caseType: CaseType = isModmailCase ? 'TICKET_HANDLED' : 'CASE_HANDLED';
-		
+
 		const modAction = this.detectActionType(message.embeds[0].title, caseType);
 		if (!modAction) return;
 

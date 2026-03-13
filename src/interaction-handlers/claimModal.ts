@@ -14,7 +14,9 @@ export class ModalHandler extends InteractionHandler {
 		const submitResult = await submitWinnerUid(interaction.user.id, eventId, uid);
 		if (!submitResult.success)
 			return interaction.reply({
-				content: submitResult.error || 'Sorry, there was an error processing your claim. Please try again later or contact the staff team if the issue persists.',
+				content:
+					submitResult.error ||
+					'Sorry, there was an error processing your claim. Please try again later or contact the staff team if the issue persists.',
 				flags: ['Ephemeral']
 			});
 

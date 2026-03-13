@@ -1,6 +1,7 @@
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
-import { TextChannel } from 'discord.js';
+import { EmbedBuilder, TextChannel } from 'discord.js';
+import { PaginatedMessage } from '@sapphire/discord.js-utilities';
 import { prisma } from 'prisma';
 import { CATEGORY_CONFIG } from 'config';
 import { config } from 'config';
@@ -190,7 +191,7 @@ export class UserCommand extends Subcommand {
 			}
 
 			// Format the response
-			let content = `**Monthly Aggregated Report (${startOfMonth.toDateString()} - ${endOfMonth.toDateString()})**\n\n`;
+			const paginatedMessage = new PaginatedMessage();
 
 			const tierEmojis: Record<number, string> = {
 				3: ':Starcore:',
@@ -198,28 +199,36 @@ export class UserCommand extends Subcommand {
 				1: ':downvote~2:'
 			};
 
+			const tierColors: Record<number, number> = {
+				3: 0xffd700,
+				2: 0xc0c0c0,
+				1: 0xcd7f32
+			};
+
 			[3, 2, 1].forEach((tier) => {
-				content += `## ${tierEmojis[tier] || ''} Tier ${tier}\n`;
 				const tierMods = tierMap.get(tier) || [];
 
+				const embed = new EmbedBuilder().setTitle(`Monthly Aggregated Report — Tier ${tier}`).setColor(tierColors[tier]);
+
+				let description = `**Period:** ${startOfMonth.toDateString()} - ${endOfMonth.toDateString()}\n\n`;
+				description += `### ${tierEmojis[tier] || ''} Tier ${tier}\n\n`;
+
 				if (tierMods.length === 0) {
-					content += '*None!*\n';
+					description += '*None!*\n';
 				} else {
 					// Sort by points descending
 					tierMods.sort((a, b) => b.points - a.points);
 					tierMods.forEach((m) => {
-						content += `<@${m.userId}> | Points: **${m.points}** | ${m.cases} Cases | ${m.tickets} Tickets | ${m.publicMessages} Msgs | ${m.voiceMinutes} Voice Mins\n`;
+						description += `**<@${m.userId}>** — **${m.points.toFixed(2)}** pts\n`;
+						description += `└ Cases: \`${m.cases}\` | Tickets: \`${m.tickets}\` | Chat: \`${m.publicMessages}\` | Voice: \`${m.voiceMinutes}m\`\n\n`;
 					});
 				}
-				content += '\n';
+
+				embed.setDescription(description);
+				paginatedMessage.addPageEmbed(embed);
 			});
 
-			// Handle limits of Discord messages
-			if (content.length > 2000) {
-				return interaction.editReply({ files: [{ attachment: Buffer.from(content), name: 'monthly-report.txt' }] });
-			} else {
-				return interaction.editReply(content);
-			}
+			return await paginatedMessage.run(interaction);
 		} catch (error) {
 			console.error(error);
 			return interaction.editReply('An error occurred while aggregating the monthly report.');

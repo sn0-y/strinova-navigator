@@ -2,7 +2,15 @@ import winnerResults from '#lib/components/winnerResults';
 import { ApplyOptions } from '@sapphire/decorators';
 import { Subcommand } from '@sapphire/plugin-subcommands';
 import { Channel, ChannelType } from 'discord.js';
-import { backfillEvent, checkDuplicateEvent, compileEventReport, createEvent, endEventAndPickWinners, getActiveEvent, getLatestEvent } from 'services/events.service';
+import {
+	backfillEvent,
+	checkDuplicateEvent,
+	compileEventReport,
+	createEvent,
+	endEventAndPickWinners,
+	getActiveEvent,
+	getLatestEvent
+} from 'services/events.service';
 
 @ApplyOptions<Subcommand.Options>({
 	name: 'event',

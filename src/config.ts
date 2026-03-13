@@ -17,18 +17,18 @@ interface config {
 export type ActivityWeightClass = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export const WEIGHT_BUDGETS: Record<ActivityWeightClass, number> = {
-    HIGH: 0.6,   // up to 60% of total score
-    MEDIUM: 0.25, // up to 25% of total score
-    LOW: 0.15    // up to 15% of total score
+	HIGH: 0.6, // up to 60% of total score
+	MEDIUM: 0.25, // up to 25% of total score
+	LOW: 0.15 // up to 15% of total score
 };
 
 export const CATEGORY_CONFIG = {
-    modChatMessages: { weightClass: 'MEDIUM' as ActivityWeightClass, pointsPerUnit: 1 },
-    publicChatMessages: { weightClass: 'LOW' as ActivityWeightClass, pointsPerUnit: 0.5 },
-    voiceChatMinutes: { weightClass: 'LOW' as ActivityWeightClass, pointsPerUnit: 0.25 },
-    
-    modActionsTaken: { weightClass: 'HIGH' as ActivityWeightClass, pointsPerUnit: 10 }, // Modmail
-    casesHandled: { weightClass: 'HIGH' as ActivityWeightClass, pointsPerUnit: 20 }     // Warns/Kicks/Bans
+	modChatMessages: { weightClass: 'MEDIUM' as ActivityWeightClass, pointsPerUnit: 1 },
+	publicChatMessages: { weightClass: 'LOW' as ActivityWeightClass, pointsPerUnit: 0.5 },
+	voiceChatMinutes: { weightClass: 'LOW' as ActivityWeightClass, pointsPerUnit: 0.25 },
+
+	modActionsTaken: { weightClass: 'HIGH' as ActivityWeightClass, pointsPerUnit: 10 }, // Modmail
+	casesHandled: { weightClass: 'HIGH' as ActivityWeightClass, pointsPerUnit: 20 } // Warns/Kicks/Bans
 };
 
 const production: config = {
@@ -59,6 +59,6 @@ const development: config = {
 	}
 };
 
-const isProduction = process.env.NODE_ENV === 'production';
+export const isProduction = process.env.NODE_ENV === 'production';
 
 export const config: config = isProduction ? production : development;
