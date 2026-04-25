@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0](https://github.com/sn0-y/strinova-navigator/compare/v1.0.0...v1.1.0) (2026-04-25)
+
+
+### Features
+
+* add CASE action to ActionDetail enum ([e47d6e9](https://github.com/sn0-y/strinova-navigator/commit/e47d6e9b2a48b3f86df8025c69b1f811f8b173ba))
+* Disable auto tier adjustments and implement manual strategy ([ddcf339](https://github.com/sn0-y/strinova-navigator/commit/ddcf3398efd1ae154956bb7ad6b45dc4ec858a5c))
+* generate weekly stats with backfill ([49c9662](https://github.com/sn0-y/strinova-navigator/commit/49c966253e651e35921b7b0791e419813b1d4928))
+* Moderation enrollment commands ([5e26a41](https://github.com/sn0-y/strinova-navigator/commit/5e26a417bcbbb8e6e3310cf88ae6fc3efc23a170))
+* safer API calls to statbot for data aggregation ([28a63ad](https://github.com/sn0-y/strinova-navigator/commit/28a63ad94594e56d41486d775c5e8a248812c38c))
+
+
+### Bug Fixes
+
+* update import path for mod rewards service to mod tracker service ([e134f64](https://github.com/sn0-y/strinova-navigator/commit/e134f6431a6d999291797a09327a2414c34c3211))
+
 ## 1.0.0 (2026-03-06)
 
 
