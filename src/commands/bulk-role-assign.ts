@@ -19,7 +19,7 @@ interface AssignmentReportRow {
 
 @ApplyOptions<Command.Options>({
 	name: 'bulk-role-assign',
-	description: 'Assign a role to many users from a txt/csv attachment',
+	description: 'Assign a role to users from a txt/csv attachment',
 	preconditions: [['LeadModOnly', 'StaffOnly']]
 })
 export class UserCommand extends Command {
@@ -75,7 +75,6 @@ export class UserCommand extends Command {
 
 		const reportRows: AssignmentReportRow[] = [];
 		const usernameResolutionCache = new Map<string, GuildMember | null>();
-		let fullMemberListCache: GuildMember[] | null = null;
 		let processed = 0;
 		let successful = 0;
 		let alreadyHadRole = 0;
@@ -110,16 +109,7 @@ export class UserCommand extends Command {
 				continue;
 			}
 
-			const member = await this.resolveMember(
-				interaction.guild,
-				extractedValue,
-				parseType,
-				usernameResolutionCache,
-				() => fullMemberListCache,
-				(members) => {
-					fullMemberListCache = members;
-				}
-			);
+			const member = await this.resolveMember(interaction.guild, extractedValue, parseType, usernameResolutionCache);
 			if (!member) {
 				failed++;
 				reportRows.push(this.buildReportRow(lineNumber, extractedValue, '', 'not-found', 'No matching guild member found'));
@@ -183,7 +173,10 @@ export class UserCommand extends Command {
 			`Assigned: **${successful}**`,
 			`Already had role: **${alreadyHadRole}**`,
 			`Failed: **${failed}**`,
-			`Skipped: **${skipped}**`
+			`Skipped: **${skipped}**`,
+			...(parseType === 'username'
+				? ['ℹ️ Username matching uses exact username/display/global-name checks from cache + query search results (max 100 query matches).']
+				: [])
 		].join('\n');
 
 		return interaction.editReply({
@@ -227,9 +220,7 @@ export class UserCommand extends Command {
 		guild: Command.ChatInputCommandInteraction['guild'],
 		input: string,
 		parseType: ParseType,
-		usernameResolutionCache: Map<string, GuildMember | null>,
-		getFullMemberListCache: () => GuildMember[] | null,
-		setFullMemberListCache: (members: GuildMember[]) => void
+		usernameResolutionCache: Map<string, GuildMember | null>
 	) {
 		if (!guild) return null;
 
@@ -264,29 +255,12 @@ export class UserCommand extends Command {
 		try {
 			const fetched = await guild.members.fetch({ query: input, limit: 100 });
 			const fromQuery = fetched.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
-			if (fromQuery) {
-				usernameResolutionCache.set(loweredInput, fromQuery);
-				return fromQuery;
-			}
+			usernameResolutionCache.set(loweredInput, fromQuery);
+			return fromQuery;
 		} catch {
-			// noop; continue to full guild lookup fallback
+			usernameResolutionCache.set(loweredInput, null);
+			return null;
 		}
-
-		let fullMemberList = getFullMemberListCache();
-		if (!fullMemberList) {
-			try {
-				const allMembers = await guild.members.fetch();
-				fullMemberList = Array.from(allMembers.values());
-				setFullMemberListCache(fullMemberList);
-			} catch {
-				usernameResolutionCache.set(loweredInput, null);
-				return null;
-			}
-		}
-
-		const fallbackMatch = fullMemberList.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
-		usernameResolutionCache.set(loweredInput, fallbackMatch);
-		return fallbackMatch;
 	}
 
 	private isUsernameMatch(member: GuildMember, loweredInput: string) {
