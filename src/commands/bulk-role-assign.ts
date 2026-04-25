@@ -2,8 +2,10 @@ import { ApplyOptions } from '@sapphire/decorators';
 import { Command } from '@sapphire/framework';
 import type { GuildMember, Role } from 'discord.js';
 
+// Discord snowflakes are currently 17-19 digits; 20 is allowed for forward compatibility.
 const USER_ID_REGEX = /\d{17,20}/;
 const MAX_PROGRESS_UPDATE_INTERVAL_MS = 3000;
+const MAX_USERNAME_QUERY_RESULTS = 100;
 
 type ParseType = 'username' | 'user-id';
 
@@ -84,7 +86,7 @@ export class UserCommand extends Command {
 
 		for (let index = 0; index < rawLines.length; index++) {
 			const lineNumber = index + 1;
-			const rawLine = rawLines[index] ?? '';
+			const rawLine = rawLines[index];
 			const trimmed = rawLine.trim();
 
 			if (!trimmed) {
@@ -175,7 +177,9 @@ export class UserCommand extends Command {
 			`Failed: **${failed}**`,
 			`Skipped: **${skipped}**`,
 			...(parseType === 'username'
-				? ['ℹ️ Username matching uses exact username/display/global-name checks from cache + query search results (max 100 query matches).']
+				? [
+						`ℹ️ Username matching uses exact username/display/global-name checks from cache + query search results (max ${MAX_USERNAME_QUERY_RESULTS} query matches).`
+					]
 				: [])
 		].join('\n');
 
@@ -207,8 +211,15 @@ export class UserCommand extends Command {
 				.replace(/^"+|"+$/g, '')
 				.replace(/^@/, '')
 		);
-		const usernameToken = tokens.find((token) => token.length > 0 && !this.extractUserId(token)) ?? tokens.find((token) => token.length > 0);
-		return usernameToken ?? null;
+
+		let firstNonEmpty: string | null = null;
+		for (const token of tokens) {
+			if (!token) continue;
+			if (!firstNonEmpty) firstNonEmpty = token;
+			if (!this.extractUserId(token)) return token;
+		}
+
+		return firstNonEmpty;
 	}
 
 	private extractUserId(value: string): string | null {
@@ -253,7 +264,7 @@ export class UserCommand extends Command {
 		}
 
 		try {
-			const fetched = await guild.members.fetch({ query: input, limit: 100 });
+			const fetched = await guild.members.fetch({ query: input, limit: MAX_USERNAME_QUERY_RESULTS });
 			const fromQuery = fetched.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
 			usernameResolutionCache.set(loweredInput, fromQuery);
 			return fromQuery;
