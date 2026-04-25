@@ -71,8 +71,11 @@ export class UserCommand extends Command {
 			return interaction.editReply('The provided file is empty.');
 		}
 		const rawLines = rawContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+		const totalNonEmptyLines = rawLines.reduce((count, line) => (line.trim() ? count + 1 : count), 0);
 
 		const reportRows: AssignmentReportRow[] = [];
+		const usernameResolutionCache = new Map<string, GuildMember | null>();
+		let fullMemberListCache: GuildMember[] | null = null;
 		let processed = 0;
 		let successful = 0;
 		let alreadyHadRole = 0;
@@ -90,6 +93,7 @@ export class UserCommand extends Command {
 				reportRows.push(this.buildReportRow(lineNumber, rawLine, '', 'skipped', 'Empty line'));
 				continue;
 			}
+			processed++;
 
 			const extractedValue = this.extractIdentifier(trimmed, parseType);
 			if (!extractedValue) {
@@ -106,16 +110,23 @@ export class UserCommand extends Command {
 				continue;
 			}
 
-			processed++;
-
-			const member = await this.resolveMember(interaction.guild, extractedValue, parseType);
+			const member = await this.resolveMember(
+				interaction.guild,
+				extractedValue,
+				parseType,
+				usernameResolutionCache,
+				() => fullMemberListCache,
+				(members) => {
+					fullMemberListCache = members;
+				}
+			);
 			if (!member) {
 				failed++;
 				reportRows.push(this.buildReportRow(lineNumber, extractedValue, '', 'not-found', 'No matching guild member found'));
 				lastProgressUpdateAt = await this.maybeUpdateProgress(
 					interaction,
 					processed,
-					rawLines.length,
+					totalNonEmptyLines,
 					successful,
 					alreadyHadRole,
 					failed,
@@ -131,7 +142,7 @@ export class UserCommand extends Command {
 				lastProgressUpdateAt = await this.maybeUpdateProgress(
 					interaction,
 					processed,
-					rawLines.length,
+					totalNonEmptyLines,
 					successful,
 					alreadyHadRole,
 					failed,
@@ -156,7 +167,7 @@ export class UserCommand extends Command {
 			lastProgressUpdateAt = await this.maybeUpdateProgress(
 				interaction,
 				processed,
-				rawLines.length,
+				totalNonEmptyLines,
 				successful,
 				alreadyHadRole,
 				failed,
@@ -197,12 +208,14 @@ export class UserCommand extends Command {
 			return this.extractUserId(line);
 		}
 
-		const username = line.includes(',') ? line.split(',')[0] : line;
-		const cleaned = username
-			.trim()
-			.replace(/^"+|"+$/g, '')
-			.replace(/^@/, '');
-		return cleaned.length > 0 ? cleaned : null;
+		const tokens = line.split(',').map((token) =>
+			token
+				.trim()
+				.replace(/^"+|"+$/g, '')
+				.replace(/^@/, '')
+		);
+		const usernameToken = tokens.find((token) => token.length > 0 && !this.extractUserId(token)) ?? tokens.find((token) => token.length > 0);
+		return usernameToken ?? null;
 	}
 
 	private extractUserId(value: string): string | null {
@@ -210,7 +223,14 @@ export class UserCommand extends Command {
 		return match ? match[0] : null;
 	}
 
-	private async resolveMember(guild: Command.ChatInputCommandInteraction['guild'], input: string, parseType: ParseType) {
+	private async resolveMember(
+		guild: Command.ChatInputCommandInteraction['guild'],
+		input: string,
+		parseType: ParseType,
+		usernameResolutionCache: Map<string, GuildMember | null>,
+		getFullMemberListCache: () => GuildMember[] | null,
+		setFullMemberListCache: (members: GuildMember[]) => void
+	) {
 		if (!guild) return null;
 
 		if (parseType === 'user-id') {
@@ -221,16 +241,52 @@ export class UserCommand extends Command {
 			}
 		}
 
+		const directId = this.extractUserId(input);
+		if (directId) {
+			try {
+				return await guild.members.fetch(directId);
+			} catch {
+				return null;
+			}
+		}
+
 		const loweredInput = input.toLowerCase();
+		if (usernameResolutionCache.has(loweredInput)) {
+			return usernameResolutionCache.get(loweredInput) ?? null;
+		}
+
 		const cached = guild.members.cache.find((member) => this.isUsernameMatch(member, loweredInput));
-		if (cached) return cached;
+		if (cached) {
+			usernameResolutionCache.set(loweredInput, cached);
+			return cached;
+		}
 
 		try {
 			const fetched = await guild.members.fetch({ query: input, limit: 100 });
-			return fetched.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
+			const fromQuery = fetched.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
+			if (fromQuery) {
+				usernameResolutionCache.set(loweredInput, fromQuery);
+				return fromQuery;
+			}
 		} catch {
-			return null;
+			// noop; continue to full guild lookup fallback
 		}
+
+		let fullMemberList = getFullMemberListCache();
+		if (!fullMemberList) {
+			try {
+				const allMembers = await guild.members.fetch();
+				fullMemberList = Array.from(allMembers.values());
+				setFullMemberListCache(fullMemberList);
+			} catch {
+				usernameResolutionCache.set(loweredInput, null);
+				return null;
+			}
+		}
+
+		const fallbackMatch = fullMemberList.find((member) => this.isUsernameMatch(member, loweredInput)) ?? null;
+		usernameResolutionCache.set(loweredInput, fallbackMatch);
+		return fallbackMatch;
 	}
 
 	private isUsernameMatch(member: GuildMember, loweredInput: string) {
@@ -244,7 +300,7 @@ export class UserCommand extends Command {
 	private async maybeUpdateProgress(
 		interaction: Command.ChatInputCommandInteraction,
 		processed: number,
-		totalLines: number,
+		totalEntries: number,
 		successful: number,
 		alreadyHadRole: number,
 		failed: number,
@@ -255,7 +311,7 @@ export class UserCommand extends Command {
 		if (now - lastProgressUpdateAt < MAX_PROGRESS_UPDATE_INTERVAL_MS) return lastProgressUpdateAt;
 
 		await interaction.editReply(
-			`⏳ Processing file... ${processed}/${totalLines} processed | ✅ ${successful} assigned | ℹ️ ${alreadyHadRole} already had role | ❌ ${failed} failed | ⏭️ ${skipped} skipped`
+			`⏳ Processing file... ${processed}/${totalEntries} processed | ✅ ${successful} assigned | ℹ️ ${alreadyHadRole} already had role | ❌ ${failed} failed | ⏭️ ${skipped} skipped`
 		);
 		return now;
 	}
@@ -285,7 +341,7 @@ export class UserCommand extends Command {
 
 	private escapeCsv(value: string) {
 		const normalized = value.replace(/"/g, '""');
-		if (/[",\n]/.test(normalized)) {
+		if (/[",\n\r]/.test(normalized)) {
 			return `"${normalized}"`;
 		}
 		return normalized;
